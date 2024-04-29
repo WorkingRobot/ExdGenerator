@@ -1,0 +1,7 @@
+[submodule "EXDSchema"]
+	path = EXDSchema
+	url = https://github.com/WorkingRobot/EXDSchema.git
+[submodule "Lumina"]
+	path = Lumina
+	url = https://github.com/WorkingRobot/Lumina
+	branch = exd-generator
