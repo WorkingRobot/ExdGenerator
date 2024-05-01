@@ -1,4 +1,4 @@
-﻿using Microsoft.CodeAnalysis.Text;
+using Microsoft.CodeAnalysis.Text;
 using System.Text;
 
 namespace ExdGenerator;
@@ -22,5 +22,22 @@ namespace {GeneratedNamespace}
         }}
     }}
 }}
+", Encoding.UTF8);
+
+    public static SourceText CreateSchemaSource(string? targetNamespace, string className, bool isPublic, SchemaSourceConverter converter) => SourceText.From($@"
+{(string.IsNullOrEmpty(targetNamespace) ? string.Empty : $@"namespace {targetNamespace}
+{{")}
+    {(!isPublic ? string.Empty : "public ")}partial class {className} : global::Lumina.Excel.ExcelRow
+    {{
+{converter.DefinitionCode}
+
+        public override void PopulateData(global::Lumina.Excel.RowParser parser, global::Lumina.GameData gameData, global::Lumina.Data.Language language)
+        {{
+            base.PopulateData(parser, gameData, language);
+
+{converter.ParseCode}
+        }}
+    }}
+{(string.IsNullOrEmpty(targetNamespace) ? string.Empty : "}")}
 ", Encoding.UTF8);
 }
