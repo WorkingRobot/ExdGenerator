@@ -68,14 +68,14 @@ public class SchemaSourceConverter
             DefinitionBuilder = new StringBuilder();
         }
 
-        public void MarkArraySize(StringBuilder pb, string pIndent, string fieldPrefix, int size)
+        public void MarkArraySize(StringBuilder pb, string pIndent, string fieldPrefix, string classPrefix, int size)
         {
             if (ArraySize.HasValue && ArraySize.Value != size)
                 throw new InvalidOperationException("Related array size mismatch");
             if (!ArraySize.HasValue)
             {
                 ArraySize = size;
-                pb.AppendLine($"{pIndent}{fieldPrefix}.{Name} = new {RelationType}[{size}];");
+                pb.AppendLine($"{pIndent}{fieldPrefix}.{Name} = new {classPrefix}{RelationType}[{size}];");
             }
         }
 
@@ -89,7 +89,7 @@ public class SchemaSourceConverter
         }
     }
 
-    private (string ParseCode, string DefinitionCode) ParseFields(IEnumerable<Field> fields, IEnumerable<KeyValuePair<string, List<string>>>? relations, IReadOnlyList<ExcelColumnDefinition> columns, int columnIdxOffset, out int finalColumnIdxOffset, out string? wrappedType, char iterVariable = 'i', int parseIndentCount = 12, string offsetPrefix = "", string fieldPrefix = "this")
+    private (string ParseCode, string DefinitionCode) ParseFields(IEnumerable<Field> fields, IEnumerable<KeyValuePair<string, List<string>>>? relations, IReadOnlyList<ExcelColumnDefinition> columns, int columnIdxOffset, out int finalColumnIdxOffset, out string? wrappedType, char iterVariable = 'i', int parseIndentCount = 12, string offsetPrefix = "", string classPrefix = "", string fieldPrefix = "this")
     {
         relations ??= [];
 
@@ -122,7 +122,7 @@ public class SchemaSourceConverter
 
                 if (field.Type != FieldType.Array)
                     throw new InvalidOperationException("Relation field must be an array");
-                relDef.MarkArraySize(pbBase, pIndent, fieldPrefix, field.Count ?? 1);
+                relDef.MarkArraySize(pbBase, pIndent, fieldPrefix, classPrefix, field.Count ?? 1);
             }
 
             var pb = new StringBuilder();
@@ -196,7 +196,8 @@ public class SchemaSourceConverter
                         var size = GetStructSize(subfields, columns, columnIdxOffset);
 
                         var subfieldPrefix = isRelation ? $"{prefixedName}[{iterVariable}].{field.Name}" : $"{prefixedName}[{iterVariable}]";
-                        var (fieldParseCode, fieldDefCode) = ParseFields(subfields, field.Relations, columns, columnIdxOffset, out _, out var fieldWrappedType, (char)(iterVariable + 1), parseIndentCount + 4, $"{prefixedOffsetPrefix}{byteOffset} + {iterVariable} * {size.byteSize}", subfieldPrefix);
+                        var subclassPrefix = $"{classPrefix}{field.Name}Struct.";
+                        var (fieldParseCode, fieldDefCode) = ParseFields(subfields, field.Relations, columns, columnIdxOffset, out _, out var fieldWrappedType, (char)(iterVariable + 1), parseIndentCount + 4, $"{prefixedOffsetPrefix}{byteOffset} + {iterVariable} * {size.byteSize}", subclassPrefix, subfieldPrefix);
 
                         if (string.IsNullOrEmpty(fieldWrappedType) == string.IsNullOrEmpty(fieldDefCode))
                             throw new InvalidOperationException("Array field must have either all named or one unnamed field");
@@ -205,13 +206,13 @@ public class SchemaSourceConverter
                         {
                             if (string.IsNullOrEmpty(field.Name))
                                 throw new InvalidOperationException("Array field must have a name attached");
-                            fieldWrappedType = $"{field.Name}Struct";
                             var tb = new StringBuilder();
-                            tb.AppendLine($"{dIndent}public class {fieldWrappedType}");
+                            tb.AppendLine($"{dIndent}public class {field.Name}Struct");
                             tb.AppendLine($"{dIndent}{{");
                             tb.AppendLine(fieldDefCode);
                             tb.AppendLine($"{dIndent}}}");
                             db.AppendLine(tb.ToString().TrimEnd());
+                            fieldWrappedType = $"{classPrefix}{field.Name}Struct";
                         }
 
                         if (!isRelation)
