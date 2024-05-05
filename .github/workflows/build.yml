@@ -26,22 +26,22 @@ jobs:
         id: retrieve-cache
         uses: actions/cache/restore@v4
         with:
-          path: data
+          path: /data
           key: exd-data
 
       - name: Download EXD files
         uses: WorkingRobot/ffxiv-downloader@8255faeaf0275f7efa43222dbeb4ebecef5e22c8
         id: downloader      
         with:
-          output-path: ./data
+          output-path: /data
           file-regex: '^sqpack\/ffxiv\/0a0000\..+$'
       
       - name: Save cache
         id: save-cache
         uses: actions/cache/save@v4
         with:
-          path: data
-          key: exd-data
+          path: /data
+          key: ${{ steps.retrieve-cache.outputs.cache-primary-key }}
 
       - name: Restore
         run: |
@@ -49,7 +49,7 @@ jobs:
 
       - name: Build
         run: |
-          dotnet build --configuration Release --no-restore
+          dotnet build GeneratedSheets3 --configuration Release --no-restore
 
       - name: Upload Artifacts
         uses: actions/upload-artifact@v4
