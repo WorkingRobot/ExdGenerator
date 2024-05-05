@@ -15,8 +15,6 @@ namespace ExdGenerator;
 [Generator]
 public class SchemaGenerator : IIncrementalGenerator
 {
-    private GameData? GameData { get; set; }
-
     public void Initialize(IncrementalGeneratorInitializationContext context)
     {
         context.RegisterPostInitializationOutput(ctx =>
@@ -28,13 +26,26 @@ public class SchemaGenerator : IIncrementalGenerator
         var options = context.AnalyzerConfigOptionsProvider.Select((provider, _) =>
         {
             provider.GlobalOptions.TryGetValue("build_property.SchemaPath", out var schemaPath);
-            provider.GlobalOptions.TryGetValue("build_property.GamePath", out var gamePath);
+            if (!provider.GlobalOptions.TryGetValue("build_property.GamePath", out var gamePath))
+                throw new InvalidOperationException("GamePath must be set");
             provider.GlobalOptions.TryGetValue("build_property.GeneratedNamespace", out var generatedNamespace);
             provider.GlobalOptions.TryGetValue("build_property.ReferencedNamespace", out var referencedNamespace);
+
+            if (schemaPath != null)
+            {
+                var schemaDir = new DirectoryInfo(schemaPath);
+                if (!schemaDir.Exists)
+                    throw new InvalidOperationException($"SchemaPath {schemaDir.FullName} does not exist");
+            }
+
+            var gameDir = new DirectoryInfo(gamePath);
+            if (!gameDir.Exists)
+                throw new InvalidOperationException($"GamePath {gameDir.FullName} does not exist");
+
             return new GeneratorOptions
             {
                 SchemaPath = schemaPath,
-                GamePath = gamePath ?? throw new InvalidOperationException("GamePath must be set"),
+                GamePath = gamePath,
                 GeneratedNamespace = generatedNamespace,
                 ReferencedNamespace = referencedNamespace ?? generatedNamespace ?? throw new InvalidOperationException("ReferencedNamespace must be set")
             };
@@ -51,9 +62,6 @@ public class SchemaGenerator : IIncrementalGenerator
         context.RegisterSourceOutput(options, GenerateSchemas);
         context.RegisterSourceOutput(attributeMetadata.Combine(options), GenerateSchema);
     }
-
-    private GameData GetGameData(GeneratorOptions options) =>
-        GameData ??= new(options.GamePath);
 
     private void GenerateSchema(SourceProductionContext context, ((string, AttributeData, INamedTypeSymbol), GeneratorOptions) args)
     {
@@ -89,7 +97,7 @@ public class SchemaGenerator : IIncrementalGenerator
         var deserializer = new DeserializerBuilder().WithNamingConvention(CamelCaseNamingConvention.Instance).Build();
         var sheet = deserializer.Deserialize<Sheet>(reader);
 
-        var converter = new SchemaSourceConverter(sheet, GetGameData(options), options.ReferencedNamespace);
+        var converter = new SchemaSourceConverter(sheet, options.GameData, options.ReferencedNamespace);
         var source = SourceConstants.CreateSchemaSource(symbol.ContainingNamespace.IsGlobalNamespace ? null : symbol.ContainingNamespace.ToString(), symbol.Name, true, converter);
         // context.Debug($"{Convert.ToBase64String(Encoding.UTF8.GetBytes(source.ToString()))}");
         context.AddSource($"{symbol.Name}.g.cs", source);
@@ -97,8 +105,7 @@ public class SchemaGenerator : IIncrementalGenerator
 
     private void GenerateSchemas(SourceProductionContext context, GeneratorOptions options)
     {
-        var gameData = GetGameData(options);
-        var sheets = gameData.Excel.GetSheetNames();
+        var sheets = options.GameData.Excel.GetSheetNames();
         foreach (var sheetName in sheets)
         {
             var fileSchemaPath = Path.GetFullPath(Path.Combine(options.SchemaPath, $"{sheetName}.yml"));
@@ -115,7 +122,7 @@ public class SchemaGenerator : IIncrementalGenerator
             var deserializer = new DeserializerBuilder().WithNamingConvention(CamelCaseNamingConvention.Instance).Build();
             var sheet = deserializer.Deserialize<Sheet>(reader);
 
-            var converter = new SchemaSourceConverter(sheet, GetGameData(options), null);
+            var converter = new SchemaSourceConverter(sheet, options.GameData, null);
             var source = SourceConstants.CreateSchemaSource(options.GeneratedNamespace, sheet.Name, false, converter);
             // context.Debug($"{sheet.Name} -> {Convert.ToBase64String(Encoding.UTF8.GetBytes(source.ToString()))}");
             context.AddSource($"{sheet.Name}.g.cs", source);
@@ -129,4 +136,13 @@ public sealed record GeneratorOptions
     public required string GamePath { get; init; }
     public required string? GeneratedNamespace { get; init; }
     public required string ReferencedNamespace { get; init; }
+
+    private GameData? gameData = null;
+    public GameData GameData
+    {
+        get
+        {
+            return gameData ??= new(GamePath);
+        }
+    }
 }
