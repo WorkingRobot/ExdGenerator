@@ -67,7 +67,7 @@ public class SchemaGenerator : IIncrementalGenerator
     {
         var ((schemaPath, attribute, symbol), options) = args;
 
-        AdditionalFileStream? resolvedSchemaFile = null;
+        Stream? resolvedSchemaFile = null;
         List<string> attemptedFilePaths = [];
 
         var filePath = attribute.ApplicationSyntaxReference?.SyntaxTree.FilePath;
@@ -75,14 +75,14 @@ public class SchemaGenerator : IIncrementalGenerator
         {
             var fileSchemaPath = Path.GetFullPath(Path.Combine(filePath, "..", schemaPath));
             attemptedFilePaths.Add(fileSchemaPath);
-            resolvedSchemaFile = AdditionalFileStream.TryOpen(fileSchemaPath);
+            resolvedSchemaFile = TryOpenFile(fileSchemaPath);
         }
 
         if (resolvedSchemaFile == null && options.SchemaPath != null)
         {
             var fileSchemaPath = Path.GetFullPath(Path.Combine(options.SchemaPath, schemaPath));
             attemptedFilePaths.Add(fileSchemaPath);
-            resolvedSchemaFile = AdditionalFileStream.TryOpen(fileSchemaPath);
+            resolvedSchemaFile = TryOpenFile(fileSchemaPath);
         }
 
         if (resolvedSchemaFile == null)
@@ -109,7 +109,7 @@ public class SchemaGenerator : IIncrementalGenerator
         foreach (var sheetName in sheets)
         {
             var fileSchemaPath = Path.GetFullPath(Path.Combine(options.SchemaPath, $"{sheetName}.yml"));
-            var schemaFile = AdditionalFileStream.TryOpen(fileSchemaPath);
+            var schemaFile = TryOpenFile(fileSchemaPath);
             if (schemaFile == null)
             {
                 context.ReportDiagnostic(Diagnostic.Create(Diagnostics.SchemaNotFound, Location.None, DiagnosticSeverity.Warning, null, null, fileSchemaPath));
@@ -126,6 +126,18 @@ public class SchemaGenerator : IIncrementalGenerator
             var source = SourceConstants.CreateSchemaSource(options.GeneratedNamespace, sheet.Name, false, converter);
             // context.Debug($"{sheet.Name} -> {Convert.ToBase64String(Encoding.UTF8.GetBytes(source.ToString()))}");
             context.AddSource($"{sheet.Name}.g.cs", source);
+        }
+    }
+
+    private static Stream? TryOpenFile(string path)
+    {
+        try
+        {
+            return new FileStream(path, FileMode.Open, FileAccess.Read, FileShare.Read);
+        }
+        catch (Exception)
+        {
+            return null;
         }
     }
 }
