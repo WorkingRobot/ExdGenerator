@@ -1,0 +1,61 @@
+name: Build
+on:
+  push:
+    branches: [main]
+    paths-ignore:
+      - 'README.md'
+
+jobs:
+  download:
+    runs-on: ubuntu-latest
+    env:
+      DOTNET_CLI_TELEMETRY_OPTOUT: true
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          submodules: recursive
+
+      - name: Setup .NET
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '8.0'
+
+      - name: Retrieve cache
+        id: retrieve-cache
+        uses: actions/cache/restore@v4
+        with:
+          path: data
+          key: exd-data
+
+      - name: Download EXD files
+        uses: WorkingRobot/ffxiv-downloader@8255faeaf0275f7efa43222dbeb4ebecef5e22c8
+        id: downloader      
+        with:
+          output-path: ./data
+          file-regex: '^sqpack\/ffxiv\/0a0000\..+$'
+      
+      - name: Save cache
+        id: save-cache
+        uses: actions/cache/save@v4
+        with:
+          path: data
+          key: exd-data
+
+      - name: Restore
+        run: |
+          dotnet restore
+
+      - name: Build
+        run: |
+          dotnet build --configuration Release --no-restore
+
+      - name: Upload Artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: GeneratedSheets
+          path: bin/Release/net8.0
+          if-no-files-found: error
+
+      
