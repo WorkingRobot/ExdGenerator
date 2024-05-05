@@ -24,10 +24,11 @@ namespace {GeneratedNamespace}
 }}
 ", Encoding.UTF8);
 
-    public static SourceText CreateSchemaSource(string? targetNamespace, string className, bool isPublic, SchemaSourceConverter converter) => SourceText.From($@"
+    public static SourceText CreateSchemaSource(string? targetNamespace, string className, bool isPartial, SchemaSourceConverter converter) => SourceText.From($@"
 {(string.IsNullOrEmpty(targetNamespace) ? string.Empty : $@"namespace {targetNamespace}
 {{")}
-    {(!isPublic ? string.Empty : "public ")}partial class {className} : global::Lumina.Excel.ExcelRow
+    [global::Lumina.Excel.Sheet({GeneratorUtils.EscapeStringToken(converter.SheetName)}, 0x{converter.ColumnHash:X8})]
+    {(isPartial ? "partial" : "public")} class {className} : global::Lumina.Excel.ExcelRow
     {{
 {converter.DefinitionCode}
 
