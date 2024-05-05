@@ -18,7 +18,7 @@
     </ItemGroup>
 
     <PropertyGroup>
-        <SchemaPath>$(SolutionDir)\EXDSchema\Schemas\2024.03.27.0000.0000</SchemaPath>
+        <SchemaPath>$(MSBuildProjectDirectory)\..\EXDSchema\Schemas\2024.03.27.0000.0000</SchemaPath>
         <GamePath>J:\Programs\steam\steamapps\common\FINAL FANTASY XIV Online\game\sqpack</GamePath>
         <GeneratedNamespace>GeneratedSheets3</GeneratedNamespace>
     </PropertyGroup>
