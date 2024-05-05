@@ -6,7 +6,7 @@ on:
       - 'README.md'
 
 jobs:
-  download:
+  build:
     runs-on: ubuntu-latest
     env:
       DOTNET_CLI_TELEMETRY_OPTOUT: true
