@@ -19,7 +19,7 @@
 
     <PropertyGroup>
         <SchemaPath>$(SolutionDir)\EXDSchema\Schemas\2024.03.27.0000.0000</SchemaPath>
-        <GamePath>/data/sqpack</GamePath>
+        <GamePath>~/data/sqpack</GamePath>
         <GeneratedNamespace>GeneratedSheets3</GeneratedNamespace>
     </PropertyGroup>
 
