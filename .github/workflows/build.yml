@@ -42,13 +42,13 @@ jobs:
 
       - name: Build
         run: |
-          dotnet build GeneratedSheets3 --configuration Release --no-restore --property:GamePath=${{ github.workspace }}/exd-data/sqpack --property:SchemaPath=${{ github.workspace }}/EXDSchema/Schemas/2024.03.27.0000.0000
+          dotnet build GeneratedSheets3 --configuration Release --no-restore --property:GamePath=${{ github.workspace }}/exd-data/sqpack
 
       - name: Upload Artifacts
         uses: actions/upload-artifact@v4
         with:
           name: GeneratedSheets
-          path: bin/Release/net8.0
+          path: GeneratedSheets3/bin/Release/net8.0
           if-no-files-found: error
 
       
