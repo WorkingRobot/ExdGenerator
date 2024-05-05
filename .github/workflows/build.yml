@@ -30,7 +30,7 @@ jobs:
           key: exd-data
 
       - name: Download EXD files
-        uses: WorkingRobot/ffxiv-downloader@07c916aed33cabde26d61765ac75cf93fda6f6fb
+        uses: WorkingRobot/ffxiv-downloader@631311890c71f584c84380d67fb729717a830c9e
         id: downloader      
         with:
           output-path: /github/workspace/exd-data
