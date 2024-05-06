@@ -76,6 +76,8 @@ public class SchemaSourceConverter
             {
                 ArraySize = size;
                 pb.AppendLine($"{pIndent}{fieldPrefix}.{Name} = new {classPrefix}{RelationType}[{size}];");
+                pb.AppendLine($"{pIndent}for (var idx = 0; idx < {size}; idx++)");
+                pb.AppendLine($"{pIndent}    {fieldPrefix}.{Name}[idx] = new();");
             }
         }
 
@@ -202,7 +204,8 @@ public class SchemaSourceConverter
                         if (string.IsNullOrEmpty(fieldWrappedType) == string.IsNullOrEmpty(fieldDefCode))
                             throw new InvalidOperationException("Array field must have either all named or one unnamed field");
 
-                        if (string.IsNullOrEmpty(fieldWrappedType))
+                        var isSubtype = string.IsNullOrEmpty(fieldWrappedType);
+                        if (isSubtype)
                         {
                             if (string.IsNullOrEmpty(field.Name))
                                 throw new InvalidOperationException("Array field must have a name attached");
@@ -224,6 +227,8 @@ public class SchemaSourceConverter
                             pb.AppendLine($"{pIndent}{prefixedName} = new {fieldWrappedType}[{fieldCount}];");
                         pb.AppendLine($"{pIndent}for (var {iterVariable} = 0; {iterVariable} < {fieldCount}; {iterVariable}++)");
                         pb.AppendLine($"{pIndent}{{");
+                        if (!isRelation && isSubtype)
+                            pb.AppendLine($"{pIndent}    {prefixedName}[{iterVariable}] = new();");
                         pb.AppendLine(fieldParseCode);
                         pb.AppendLine($"{pIndent}}}");
 
