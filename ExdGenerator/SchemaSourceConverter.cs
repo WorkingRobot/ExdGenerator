@@ -151,7 +151,7 @@ public class SchemaSourceConverter
                     {
                         var column = columns[columnIdxOffset];
                         var colSize = GetColumnSize(columns, columnIdxOffset);
-                        var fieldRow = $"checked((uint)parser.ReadOffset<{LookupTypeName(column.Type)}>({prefixedOffsetPrefix}{byteOffset}, {GetGlobalName<ExcelColumnDataType>()}.{column.Type}))";
+                        var fieldRow = $"(uint)parser.ReadOffset<{LookupTypeName(column.Type)}>({prefixedOffsetPrefix}{byteOffset}, {GetGlobalName<ExcelColumnDataType>()}.{column.Type})";
                         if (field.Targets == null)
                         {
                             if (field.Condition == null)
