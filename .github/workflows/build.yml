@@ -2,8 +2,6 @@ name: Build
 on:
   push:
     branches: [main]
-    paths-ignore:
-      - 'README.md'
 
 jobs:
   build:
@@ -42,13 +40,21 @@ jobs:
 
       - name: Build
         run: |
-          dotnet build GeneratedSheets3 --configuration Release --no-restore --property:GamePath=${{ github.workspace }}/exd-data/sqpack
+          dotnet build ExdSheets --configuration Release --no-restore --property:GamePath=${{ github.workspace }}/exd-data/sqpack
+
+      - name: Pack
+        run: |
+          dotnet pack ExdSheets --configuration Release --no-build --output .
 
       - name: Upload Artifacts
         uses: actions/upload-artifact@v4
         with:
-          name: GeneratedSheets
-          path: GeneratedSheets3/bin/Release/net8.0
+          name: ExdSheets
+          path: ExdSheets/bin/Release
           if-no-files-found: error
 
-      
+      - name: Upload Nupkg
+        if: startsWith(github.ref, 'refs/tags/')
+        run: dotnet nuget push ExdSheets/bin/Release/*.nupkg -s https://api.nuget.org/v3/index.json -k ${{secrets.NUGET_API_KEY}}
+
+

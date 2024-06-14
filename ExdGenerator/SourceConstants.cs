@@ -11,6 +11,7 @@ internal static class SourceConstants
 using System;
 namespace {GeneratedNamespace}
 {{
+    [global::System.CodeDom.Compiler.GeneratedCode(""ExdGenerator"", ""1.0.0"")]
     [AttributeUsage(AttributeTargets.Class, Inherited = false, AllowMultiple = false)]
     public sealed class {attributeName}Attribute : Attribute
     {{
@@ -27,6 +28,7 @@ namespace {GeneratedNamespace}
     public static SourceText CreateSchemaSource(string? targetNamespace, string className, bool isPartial, SchemaSourceConverter converter) => SourceText.From($@"
 {(string.IsNullOrEmpty(targetNamespace) ? string.Empty : $@"namespace {targetNamespace}
 {{")}
+    [global::System.CodeDom.Compiler.GeneratedCode(""ExdGenerator"", ""1.0.0"")]
     [global::Lumina.Excel.Sheet({GeneratorUtils.EscapeStringToken(converter.SheetName)}, 0x{converter.ColumnHash:X8})]
     {(isPartial ? "partial" : "public")} class {className} : global::Lumina.Excel.ExcelRow
     {{

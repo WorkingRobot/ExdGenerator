@@ -1,12 +1,11 @@
 using ExdGenerator.Schema;
 using Lumina;
-using Lumina.Excel;
 using Microsoft.CodeAnalysis;
 using System;
 using System.Collections.Generic;
+using System.Diagnostics;
 using System.IO;
 using System.Linq;
-using System.Text;
 using YamlDotNet.Serialization;
 using YamlDotNet.Serialization.NamingConventions;
 
@@ -105,22 +104,23 @@ public class SchemaGenerator : IIncrementalGenerator
 
     private void GenerateSchemas(SourceProductionContext context, GeneratorOptions options)
     {
-        var sheets = options.GameData.Excel.GetSheetNames();
-        foreach (var sheetName in sheets)
+        foreach (var file in GetFiles(options.SchemaPath!, "*.yml"))
         {
-            var fileSchemaPath = Path.GetFullPath(Path.Combine(options.SchemaPath, $"{sheetName}.yml"));
-            var schemaFile = TryOpenFile(fileSchemaPath);
+            var schemaFile = TryOpenFile(file);
             if (schemaFile == null)
-            {
-                context.ReportDiagnostic(Diagnostic.Create(Diagnostics.SchemaNotFound, Location.None, DiagnosticSeverity.Warning, null, null, fileSchemaPath));
-                continue;
-            }
+                throw new InvalidOperationException($"Failed to open schema file {file}");
 
             using var schema = schemaFile;
             using var reader = new StreamReader(schema);
 
             var deserializer = new DeserializerBuilder().WithNamingConvention(CamelCaseNamingConvention.Instance).Build();
             var sheet = deserializer.Deserialize<Sheet>(reader);
+
+            if (options.GameData.Excel.GetSheetRaw(sheet.Name) == null)
+            {
+                context.ReportDiagnostic(Diagnostic.Create(Diagnostics.SheetNotFound, Location.None, DiagnosticSeverity.Warning, null, null, sheet.Name));
+                continue;
+            }
 
             var converter = new SchemaSourceConverter(sheet, options.GameData, null);
             var source = SourceConstants.CreateSchemaSource(options.GeneratedNamespace, sheet.Name, false, converter);
@@ -140,6 +140,13 @@ public class SchemaGenerator : IIncrementalGenerator
             return null;
         }
     }
+
+    private static string[] GetFiles(string folder, string pattern)
+    {
+        var type = Type.GetType("System.IO.Directory");
+        var getFiles = type.GetMethod("GetFiles", [typeof(string), typeof(string)]);
+        return (string[])getFiles.Invoke(null, [folder, pattern]);
+    }
 }
 
 public sealed record GeneratorOptions
@@ -154,7 +161,17 @@ public sealed record GeneratorOptions
     {
         get
         {
-            return gameData ??= new(GamePath);
+            if (gameData == null)
+            {
+                var s = Stopwatch.StartNew();
+                var ret = new GameData(GamePath, new() { LoadMultithreaded = true });
+                s.Stop();
+                using var fs = new FileStream(@"J:\Code\Projects\Meteor\elapsed.txt", FileMode.Create, FileAccess.Write);
+                using var tr = new StreamWriter(fs);
+                tr.WriteLine($"Loaded game data in {s.ElapsedMilliseconds:0.00}ms");
+                return gameData = ret;
+            }
+            return gameData;
         }
     }
 }
