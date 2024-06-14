@@ -14,14 +14,20 @@
         <PackageTags>ffxiv;lumina;exd;dalamud;excel</PackageTags>
         <PackageLicenseExpression>MIT</PackageLicenseExpression>
         <PackageProjectUrl>https://github.com/WorkingRobot/ExdGenerator</PackageProjectUrl>
+        <RepositoryUrl>https://github.com/WorkingRobot/ExdGenerator</RepositoryUrl>
         <PackageReadmeFile>README.md</PackageReadmeFile>
+
+        <PublishRepositoryUrl>true</PublishRepositoryUrl>
+        <IncludeSymbols>true</IncludeSymbols>
+        <SymbolPackageFormat>snupkg</SymbolPackageFormat>
     </PropertyGroup>
 
     <ItemGroup>
-        <None Include="../README.md" Pack="true" PackagePath="\"/>
+        <None Include="../README.md" Pack="true" PackagePath="\" />
         
         <ProjectReference Include="..\ExdGenerator\ExdGenerator.csproj" OutputItemType="Analyzer" ReferenceOutputAssembly="false" IncludeAssets="all" />
-        <PackageReference Include="Lumina" Version="4.0.0" />
+        <PackageReference Include="Lumina" Version="3.14.0" />
+        <PackageReference Include="Microsoft.SourceLink.GitHub" Version="1.0.0" PrivateAssets="All" />
     </ItemGroup>
 
     <ItemGroup>

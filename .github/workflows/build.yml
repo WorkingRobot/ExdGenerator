@@ -1,12 +1,19 @@
 name: Build
+
 on:
   push
+
+permissions:
+  contents: write
+  packages: write
+
+env:
+  DOTNET_CLI_TELEMETRY_OPTOUT: true
+  DOTNET_NOLOGO: true
 
 jobs:
   build:
     runs-on: ubuntu-latest
-    env:
-      DOTNET_CLI_TELEMETRY_OPTOUT: true
 
     steps:
       - name: Checkout
@@ -39,11 +46,11 @@ jobs:
 
       - name: Build
         run: |
-          dotnet build ExdSheets --configuration Release --no-restore --property:GamePath=${{ github.workspace }}/exd-data/sqpack
+          dotnet build ExdSheets -c Release --no-restore --property:GamePath=${{ github.workspace }}/exd-data/sqpack /p:ContinuousIntegrationBuild=true
 
       - name: Pack
         run: |
-          dotnet pack ExdSheets --configuration Release --no-build --output .
+          dotnet pack ExdSheets -c Release --no-build
 
       - name: Upload Artifacts
         uses: actions/upload-artifact@v4
@@ -52,12 +59,17 @@ jobs:
           path: ExdSheets/bin/Release
           if-no-files-found: error
 
+      - name: Upload to GPR
+        run: dotnet nuget push ExdSheets/bin/Release/*.nupkg -s https://nuget.pkg.github.com/${{github.repository_owner}} -k ${{secrets.GITHUB_TOKEN}}
+
       - name: Create Release
         uses: softprops/action-gh-release@v1
         if: startsWith(github.ref, 'refs/tags/')
         id: release
         with:
-          files: ExdSheets/bin/Release/*.nupkg
+          files: |
+            ExdSheets/bin/Release/*.nupkg
+            ExdSheets/bin/Release/*.snupkg
 
       - name: Upload to NuGet
         if: startsWith(github.ref, 'refs/tags/')
