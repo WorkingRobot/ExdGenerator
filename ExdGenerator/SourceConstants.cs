@@ -6,41 +6,85 @@ namespace ExdGenerator;
 internal static class SourceConstants
 {
     public const string GeneratedNamespace = "ExdGenerator.Generated";
+    public const string Version = "1.0.0";
 
-    public static SourceText CreateAttributeSource(string attributeName) => SourceText.From($@"
-using System;
-namespace {GeneratedNamespace}
+    public static SourceText CreateAttributeSource(string attributeName, bool useFileScopedNamespace)
+    {
+        var ret = $@"
+[GeneratedCode(""ExdGenerator"", {GeneratorUtils.EscapeStringToken(Version)})]
+[AttributeUsage(AttributeTargets.Class, Inherited = false, AllowMultiple = false)]
+internal sealed class {attributeName}Attribute : Attribute
 {{
-    [global::System.CodeDom.Compiler.GeneratedCode(""ExdGenerator"", ""1.0.0"")]
-    [AttributeUsage(AttributeTargets.Class, Inherited = false, AllowMultiple = false)]
-    public sealed class {attributeName}Attribute : Attribute
-    {{
-        public string SchemaPath {{ get; }}
+    public string SchemaPath {{ get; }}
     
-        public {attributeName}Attribute(string schemaPath)
-        {{
-            SchemaPath = schemaPath;
-        }}
-    }}
-}}
-", Encoding.UTF8);
-
-    public static SourceText CreateSchemaSource(string? targetNamespace, string className, bool isPartial, SchemaSourceConverter converter) => SourceText.From($@"
-{(string.IsNullOrEmpty(targetNamespace) ? string.Empty : $@"namespace {targetNamespace}
-{{")}
-    [global::System.CodeDom.Compiler.GeneratedCode(""ExdGenerator"", ""1.0.0"")]
-    [global::Lumina.Excel.Sheet({GeneratorUtils.EscapeStringToken(converter.SheetName)}, 0x{converter.ColumnHash:X8})]
-    {(isPartial ? "partial" : "public")} class {className} : global::Lumina.Excel.ExcelRow
+    public {attributeName}Attribute(string schemaPath)
     {{
-{converter.DefinitionCode}
-
-        public override void PopulateData(global::Lumina.Excel.RowParser parser, global::Lumina.GameData gameData, global::Lumina.Data.Language language)
-        {{
-            base.PopulateData(parser, gameData, language);
-
-{converter.ParseCode}
-        }}
+        SchemaPath = schemaPath;
     }}
-{(string.IsNullOrEmpty(targetNamespace) ? string.Empty : "}")}
-", Encoding.UTF8);
+}}";
+
+        ret = ScopeNamespace(useFileScopedNamespace, "    ", GeneratedNamespace, ret);
+
+        ret = $@"
+using System;
+using System.CodeDom.Compiler;
+{ret}";
+
+        return SourceText.From(ret.Trim(), Encoding.UTF8);
+    }
+
+    public static SourceText CreateSchemaSource(string? targetNamespace, string className, bool isPartial, bool useFileScopedNamespace, SchemaSourceConverter converter)
+    {
+        var globalize = converter.TypeGlobalizer.GlobalizeType;
+
+        var sb = new IndentedStringBuilder(converter.IndentString);
+        sb.AppendLine($@"[{globalize("System.CodeDom.Compiler.GeneratedCode")}(""ExdGenerator"", {GeneratorUtils.EscapeStringToken(Version)})]");
+        sb.AppendLine($@"[{globalize("Lumina.Excel.Sheet")}({GeneratorUtils.EscapeStringToken(converter.SheetName)}, 0x{converter.ColumnHash:X8})]");
+        sb.AppendLine($@"{(isPartial ? "partial" : "public")} class {className} : {globalize("Lumina.Excel.ExcelRow")}");
+        sb.AppendLine("{");
+        using (sb.IndentScope())
+        {
+            sb.AppendLines(converter.DefinitionCode);
+            sb.AppendLine();
+            sb.AppendLine($@"public override void PopulateData({globalize("Lumina.Excel.RowParser")} parser, {globalize("Lumina.GameData")} gameData, {globalize("Lumina.Data.Language")} language)");
+            sb.AppendLine("{");
+            using (sb.IndentScope())
+            {
+                sb.AppendLine("base.PopulateData(parser, gameData, language);");
+                sb.AppendLine();
+                sb.AppendLines(converter.ParseCode);
+            }
+            sb.AppendLine("}");
+        }
+        sb.AppendLine("}");
+
+        var ret = sb.ToString();
+
+        if (!string.IsNullOrEmpty(targetNamespace))
+            ret = ScopeNamespace(useFileScopedNamespace, converter.IndentString, targetNamespace!, ret);
+
+        ret = $"{converter.TypeGlobalizer.GetUsings()}\n{ret}";
+
+        return SourceText.From(ret.Trim(), Encoding.UTF8);
+    }
+
+    private static string ScopeNamespace(bool useFileScope, string indentString, string ns, string text)
+    {
+        var b = new StringBuilder();
+        text = text.Trim();
+        if (useFileScope)
+        {
+            b.AppendLine($"namespace {ns};");
+            b.AppendLine();
+            b.Append(text);
+        }
+        else
+        {
+            b.AppendLine($"namespace {ns}");
+            b.AppendLine("{");
+            b.AppendLine(IndentedStringBuilder.Indent(text, indentString, 1));
+            b.AppendLine("}");
+        }
+        return b.ToString();
+    }
 }

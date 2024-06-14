@@ -3,9 +3,9 @@ using Lumina;
 using Microsoft.CodeAnalysis;
 using System;
 using System.Collections.Generic;
-using System.Diagnostics;
 using System.IO;
 using System.Linq;
+using System.Text;
 using YamlDotNet.Serialization;
 using YamlDotNet.Serialization.NamingConventions;
 
@@ -14,12 +14,15 @@ namespace ExdGenerator;
 [Generator]
 public class SchemaGenerator : IIncrementalGenerator
 {
+    private const bool DebugFiles = false;
+
     public void Initialize(IncrementalGeneratorInitializationContext context)
     {
         context.RegisterPostInitializationOutput(ctx =>
         {
-            ctx.AddSource("SheetSchemaAttribute.g.cs", SourceConstants.CreateAttributeSource("SheetSchema"));
+            ctx.AddSource("SheetSchemaAttribute.g.cs", SourceConstants.CreateAttributeSource("SheetSchema", false));
         });
+
         var fqmn = $"{SourceConstants.GeneratedNamespace}.SheetSchemaAttribute";
 
         var options = context.AnalyzerConfigOptionsProvider.Select((provider, _) =>
@@ -29,6 +32,10 @@ public class SchemaGenerator : IIncrementalGenerator
                 throw new InvalidOperationException("GamePath must be set");
             provider.GlobalOptions.TryGetValue("build_property.GeneratedNamespace", out var generatedNamespace);
             provider.GlobalOptions.TryGetValue("build_property.ReferencedNamespace", out var referencedNamespace);
+            provider.GlobalOptions.TryGetValue("build_property.IndentSize", out var indentSize);
+            provider.GlobalOptions.TryGetValue("build_property.UseUsings", out var useUsings);
+            provider.GlobalOptions.TryGetValue("build_property.UseFileScopedNamespace", out var useFileScopedNamespace);
+            provider.GlobalOptions.TryGetValue("build_property.UseThis", out var useThis);
 
             if (schemaPath != null)
             {
@@ -41,12 +48,40 @@ public class SchemaGenerator : IIncrementalGenerator
             if (!gameDir.Exists)
                 throw new InvalidOperationException($"GamePath {gameDir.FullName} does not exist");
 
+            var indentString = "    ";
+            if (!string.IsNullOrWhiteSpace(indentSize))
+            {
+                if (int.TryParse(indentSize, out var size))
+                    indentString = new string(' ', size);
+                else if (indentSize!.Equals("tab", StringComparison.InvariantCultureIgnoreCase))
+                    indentString = "\t";
+                else
+                    throw new InvalidOperationException("IndentSize must be a number or 'tab'");
+                    
+            }
+
+            var useUsingsBool = false;
+            if (useUsings != null)
+                useUsingsBool = useUsings.Equals("true", StringComparison.InvariantCultureIgnoreCase) || useUsings == "1";
+
+            var useFileScopedNamespaceBool = false;
+            if (useFileScopedNamespace != null)
+                useFileScopedNamespaceBool = useFileScopedNamespace.Equals("true", StringComparison.InvariantCultureIgnoreCase) || useFileScopedNamespace == "1";
+
+            var useThisBool = true;
+            if (useThis != null)
+                useThisBool = useThis.Equals("true", StringComparison.InvariantCultureIgnoreCase) || useThis == "1";
+
             return new GeneratorOptions
             {
                 SchemaPath = schemaPath,
                 GamePath = gamePath,
                 GeneratedNamespace = generatedNamespace,
-                ReferencedNamespace = referencedNamespace ?? generatedNamespace ?? throw new InvalidOperationException("ReferencedNamespace must be set")
+                ReferencedNamespace = referencedNamespace ?? generatedNamespace ?? throw new InvalidOperationException("ReferencedNamespace must be set"),
+                IndentString = indentString,
+                UseUsings = useUsingsBool,
+                UseFileScopedNamespace = useFileScopedNamespaceBool,
+                UseThis = useThisBool
             };
         });
 
@@ -96,9 +131,10 @@ public class SchemaGenerator : IIncrementalGenerator
         var deserializer = new DeserializerBuilder().WithNamingConvention(CamelCaseNamingConvention.Instance).Build();
         var sheet = deserializer.Deserialize<Sheet>(reader);
 
-        var converter = new SchemaSourceConverter(sheet, options.GameData, options.ReferencedNamespace);
-        var source = SourceConstants.CreateSchemaSource(symbol.ContainingNamespace.IsGlobalNamespace ? null : symbol.ContainingNamespace.ToString(), symbol.Name, true, converter);
-        // context.Debug($"{Convert.ToBase64String(Encoding.UTF8.GetBytes(source.ToString()))}");
+        var converter = new SchemaSourceConverter(sheet, options.GameData, new(options.UseUsings), options.IndentString, options.UseThis, options.ReferencedNamespace);
+        var source = SourceConstants.CreateSchemaSource(symbol.ContainingNamespace.IsGlobalNamespace ? null : symbol.ContainingNamespace.ToString(), symbol.Name, true, options.UseFileScopedNamespace, converter);
+        if (DebugFiles)
+            context.Debug($"{Convert.ToBase64String(Encoding.UTF8.GetBytes(source.ToString()))}");
         context.AddSource($"{symbol.Name}.g.cs", source);
     }
 
@@ -122,9 +158,10 @@ public class SchemaGenerator : IIncrementalGenerator
                 continue;
             }
 
-            var converter = new SchemaSourceConverter(sheet, options.GameData, null);
-            var source = SourceConstants.CreateSchemaSource(options.GeneratedNamespace, sheet.Name, false, converter);
-            // context.Debug($"{sheet.Name} -> {Convert.ToBase64String(Encoding.UTF8.GetBytes(source.ToString()))}");
+            var converter = new SchemaSourceConverter(sheet, options.GameData, new(options.UseUsings), options.IndentString, options.UseThis, null);
+            var source = SourceConstants.CreateSchemaSource(options.GeneratedNamespace, sheet.Name, false, options.UseFileScopedNamespace, converter);
+            if (DebugFiles)
+                context.Debug($"{sheet.Name} -> {Convert.ToBase64String(Encoding.UTF8.GetBytes(source.ToString()))}");
             context.AddSource($"{sheet.Name}.g.cs", source);
         }
     }
@@ -155,6 +192,10 @@ public sealed record GeneratorOptions
     public required string GamePath { get; init; }
     public required string? GeneratedNamespace { get; init; }
     public required string ReferencedNamespace { get; init; }
+    public required string IndentString { get; init; }
+    public required bool UseUsings { get; init; }
+    public required bool UseFileScopedNamespace { get; init; }
+    public required bool UseThis { get; init; }
 
     private GameData? gameData = null;
     public GameData GameData
@@ -162,15 +203,7 @@ public sealed record GeneratorOptions
         get
         {
             if (gameData == null)
-            {
-                var s = Stopwatch.StartNew();
-                var ret = new GameData(GamePath, new() { LoadMultithreaded = true });
-                s.Stop();
-                using var fs = new FileStream(@"J:\Code\Projects\Meteor\elapsed.txt", FileMode.Create, FileAccess.Write);
-                using var tr = new StreamWriter(fs);
-                tr.WriteLine($"Loaded game data in {s.ElapsedMilliseconds:0.00}ms");
-                return gameData = ret;
-            }
+                return gameData = new GameData(GamePath, new() { LoadMultithreaded = true });
             return gameData;
         }
     }

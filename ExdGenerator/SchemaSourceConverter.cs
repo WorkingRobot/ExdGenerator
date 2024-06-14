@@ -6,15 +6,15 @@ using Lumina.Text;
 using System;
 using System.Collections.Generic;
 using System.Linq;
-using System.Runtime.CompilerServices;
-using System.Text;
 
 namespace ExdGenerator;
 
 public class SchemaSourceConverter
 {
-    private Sheet Definition { get; }
-    private GameData GameData { get; }
+    public Sheet Definition { get; }
+    public GameData GameData { get; }
+    public TypeGlobalizer TypeGlobalizer { get; }
+    public string IndentString { get; }
     private RawExcelSheet GameSheet { get; }
     private string? ReferencedSheetNamespace { get; }
 
@@ -24,10 +24,12 @@ public class SchemaSourceConverter
     public string SheetName { get; }
     public uint ColumnHash { get; }
 
-    public SchemaSourceConverter(Sheet sheetDefinition, GameData gameData, string? referencedSheetNamespace)
+    public SchemaSourceConverter(Sheet sheetDefinition, GameData gameData, TypeGlobalizer typeGlobalizer, string indentString, bool useThis, string? referencedSheetNamespace)
     {
         Definition = sheetDefinition;
         GameData = gameData;
+        TypeGlobalizer = typeGlobalizer;
+        IndentString = indentString;
 
         GameSheet = GameData.Excel.GetSheetRaw(Definition.Name) ?? throw new InvalidOperationException($"Sheet {Definition.Name} not found in game data");
 
@@ -35,10 +37,8 @@ public class SchemaSourceConverter
             ReferencedSheetNamespace = null;
         else
         {
-            if (!referencedSheetNamespace!.StartsWith("global::"))
-                referencedSheetNamespace = $"global::{referencedSheetNamespace}";
-            if (referencedSheetNamespace.EndsWith('.'))
-                referencedSheetNamespace = referencedSheetNamespace[..^1];
+            if (referencedSheetNamespace!.EndsWith('.'))
+                referencedSheetNamespace = referencedSheetNamespace![..^1];
             ReferencedSheetNamespace = referencedSheetNamespace;
         }
 
@@ -47,7 +47,8 @@ public class SchemaSourceConverter
 
         var orderedColumns = GameSheet.Columns.GroupBy(c => c.Offset).OrderBy(c => c.Key).SelectMany(g => g.OrderBy(c => c.Type)).ToList();
 
-        (ParseCode, DefinitionCode) = ParseFields(Definition.Fields, Definition.Relations, orderedColumns, 0, out var offset, out _);
+        (ParseCode, DefinitionCode) = ParseFields(Definition.Fields, Definition.Relations, orderedColumns, 0, out var offset, out _, fieldPrefix: useThis ? "this" : string.Empty, isRoot: true);
+
         if (offset != orderedColumns.Count)
             throw new InvalidOperationException($"Expected {orderedColumns.Count} columns, but only parsed {offset}");
     }
@@ -56,52 +57,55 @@ public class SchemaSourceConverter
     {
         public string Name { get; }
         public List<string> FieldNames { get; }
-        public StringBuilder DefinitionBuilder { get; }
+        public IndentedStringBuilder DefinitionBuilder { get; }
         public int? ArraySize { get; private set; }
         public string RelationType => $"{Name}Struct";
         private bool PushedProperty { get; set; }
 
-        public RelationInfo(KeyValuePair<string, List<string>> relation)
+        public RelationInfo(string indentString, KeyValuePair<string, List<string>> relation)
         {
             Name = relation.Key;
             FieldNames = relation.Value;
-            DefinitionBuilder = new StringBuilder();
+            DefinitionBuilder = new IndentedStringBuilder(indentString);
         }
 
-        public void MarkArraySize(StringBuilder pb, string pIndent, string fieldPrefix, string classPrefix, int size)
+        public void MarkArraySize(IndentedStringBuilder pb, string fieldPrefix, string classPrefix, int size)
         {
             if (ArraySize.HasValue && ArraySize.Value != size)
                 throw new InvalidOperationException("Related array size mismatch");
             if (!ArraySize.HasValue)
             {
                 ArraySize = size;
-                pb.AppendLine($"{pIndent}{fieldPrefix}.{Name} = new {classPrefix}{RelationType}[{size}];");
-                pb.AppendLine($"{pIndent}for (var idx = 0; idx < {size}; idx++)");
-                pb.AppendLine($"{pIndent}    {fieldPrefix}.{Name}[idx] = new();");
+                var name = ApplyPrefix(fieldPrefix, Name);
+                pb.AppendLine($"{name} = new {classPrefix}{RelationType}[{size}];");
+                pb.AppendLine($"for (var idx = 0; idx < {size}; idx++)");
+                pb.AppendLine($"{name}[idx] = new();", 1);
             }
         }
 
-        public void PushProperty(StringBuilder db, string dIndent)
+        public void PushProperty(IndentedStringBuilder db)
         {
             if (!PushedProperty)
             {
-                db.AppendLine($"{dIndent}public {RelationType}[] {Name} {{ get; internal set; }}");
+                db.AppendLine($"public {RelationType}[] {Name} {{ get; internal set; }}");
                 PushedProperty = true;
             }
         }
     }
 
-    private (string ParseCode, string DefinitionCode) ParseFields(IEnumerable<Field> fields, IEnumerable<KeyValuePair<string, List<string>>>? relations, IReadOnlyList<ExcelColumnDefinition> columns, int columnIdxOffset, out int finalColumnIdxOffset, out string? wrappedType, char iterVariable = 'i', int parseIndentCount = 12, string offsetPrefix = "", string classPrefix = "", string fieldPrefix = "this")
+    // TODO: field prefix check if empty before suffixing a .
+    private (string ParseCode, string DefinitionCode) ParseFields(IEnumerable<Field> fields, IEnumerable<KeyValuePair<string, List<string>>>? relations, IReadOnlyList<ExcelColumnDefinition> columns, int columnIdxOffset, out int finalColumnIdxOffset, out string? wrappedType, char iterVariable = 'i', string offsetPrefix = "", string classPrefix = "", string fieldPrefix = "", bool isRoot = false)
     {
+        if (iterVariable < 'a' || iterVariable > 'z')
+            throw new InvalidOperationException("Iter variable must be a lowercase letter");
+
         relations ??= [];
 
-        var pIndent = new string(' ', parseIndentCount);
-        var pbBase = new StringBuilder();
+        var pbBase = new IndentedStringBuilder(IndentString);
 
-        var dIndent = new string(' ', parseIndentCount - 4);
-        var dbBase = new StringBuilder();
+        var dbBase = new IndentedStringBuilder(IndentString);
 
-        var relationDefs = relations.ToDictionary(r => r.Key, r => new RelationInfo(r));
+        var relationDefs = relations.ToDictionary(r => r.Key, r => new RelationInfo(IndentString, r));
 
         var parseSnippets = new Dictionary<Field, string>();
 
@@ -110,7 +114,7 @@ public class SchemaSourceConverter
         foreach (var field in fields)
         {
             var hasName = !string.IsNullOrEmpty(field.Name);
-            var prefixedName = !hasName ? (fieldPrefix[^1] == '.' ? fieldPrefix[..^1] : fieldPrefix) : $"{fieldPrefix}.{field.Name}";
+            var prefixedName = !hasName ? TrimPrefix(fieldPrefix) : ApplyPrefix(fieldPrefix, field.Name!);
             var prefixedOffsetPrefix = string.IsNullOrEmpty(offsetPrefix) ? "" : $"{offsetPrefix} + ";
 
             var db = dbBase;
@@ -120,14 +124,14 @@ public class SchemaSourceConverter
             {
                 var relDef = relationDefs[relationName];
                 db = relDef.DefinitionBuilder;
-                prefixedName = $"{fieldPrefix}.{relationName}";
+                prefixedName = ApplyPrefix(fieldPrefix, relationName);
 
                 if (field.Type != FieldType.Array)
                     throw new InvalidOperationException("Relation field must be an array");
-                relDef.MarkArraySize(pbBase, pIndent, fieldPrefix, classPrefix, field.Count ?? 1);
+                relDef.MarkArraySize(pbBase, fieldPrefix, classPrefix, field.Count ?? 1);
             }
 
-            var pb = new StringBuilder();
+            var pb = new IndentedStringBuilder(IndentString);
 
             string fieldTypeName;
 
@@ -141,7 +145,7 @@ public class SchemaSourceConverter
                         var column = columns[columnIdxOffset];
                         var colSize = GetColumnSize(columns, columnIdxOffset);
                         var typeName = LookupTypeName(column.Type);
-                        pb.AppendLine($"{pIndent}{prefixedName} = parser.ReadOffset<{typeName}>({prefixedOffsetPrefix}{byteOffset}, {GetGlobalName<ExcelColumnDataType>()}.{column.Type});");
+                        pb.AppendLine($"{prefixedName} = parser.ReadOffset<{typeName}>({prefixedOffsetPrefix}{byteOffset}, {Globalize<ExcelColumnDataType>()}.{column.Type});");
                         fieldTypeName = typeName;
                         columnIdxOffset++;
                         byteOffset += colSize;
@@ -151,37 +155,40 @@ public class SchemaSourceConverter
                     {
                         var column = columns[columnIdxOffset];
                         var colSize = GetColumnSize(columns, columnIdxOffset);
-                        var fieldRow = $"(uint)parser.ReadOffset<{LookupTypeName(column.Type)}>({prefixedOffsetPrefix}{byteOffset}, {GetGlobalName<ExcelColumnDataType>()}.{column.Type})";
+                        var fieldRow = $"(uint)parser.ReadOffset<{LookupTypeName(column.Type)}>({prefixedOffsetPrefix}{byteOffset}, {Globalize<ExcelColumnDataType>()}.{column.Type})";
                         if (field.Targets == null)
                         {
                             if (field.Condition == null)
                                 throw new InvalidOperationException($"Field {field.Name} has no targets or condition");
 
-                            pb.AppendLine($"{pIndent}{prefixedName} = this.{field.Condition.Switch} switch");
-                            pb.AppendLine($"{pIndent}{{");
-                            foreach (var (val, targets) in field.Condition.Cases!)
+                            pb.AppendLine($"{prefixedName} = this.{field.Condition.Switch} switch");
+                            pb.AppendLine("{");
+                            using (pb.IndentScope())
                             {
-                                if (targets.Count == 1)
-                                    pb.AppendLine($"{pIndent}    {val} => new global::Lumina.Excel.LazyRow<{DecorateReferencedType(targets[0])}>(gameData, {fieldRow}, language),");
-                                else
-                                    pb.AppendLine($"{pIndent}    {val} => {GetGlobalName<EmptyLazyRow>()}.GetFirstLazyRowOrEmpty(gameData, {fieldRow}, language, {string.Join(", ", targets.Select(GeneratorUtils.EscapeStringToken))}),");
+                                foreach (var (val, targets) in field.Condition.Cases!)
+                                {
+                                    if (targets.Count == 1)
+                                        pb.AppendLine($"{val} => new {Globalize("Lumina.Excel.LazyRow")}<{DecorateReferencedType(targets[0])}>(gameData, {fieldRow}, language),");
+                                    else
+                                        pb.AppendLine($"{val} => {Globalize<EmptyLazyRow>()}.GetFirstLazyRowOrEmpty(gameData, {fieldRow}, language, {string.Join(", ", targets.Select(GeneratorUtils.EscapeStringToken))}),");
+                                }
+                                pb.AppendLine($"_ => new {Globalize<EmptyLazyRow>()}({fieldRow}),");
                             }
-                            pb.AppendLine($"{pIndent}    _ => new {GetGlobalName<EmptyLazyRow>()}({fieldRow}),");
-                            pb.AppendLine($"{pIndent}}};");
+                            pb.AppendLine("};");
 
-                            fieldTypeName = GetGlobalName<ILazyRow>();
+                            fieldTypeName = Globalize<ILazyRow>();
                         }
                         else
                         {
                             if (field.Targets.Count == 1)
                             {
-                                fieldTypeName = $"global::Lumina.Excel.LazyRow<{DecorateReferencedType(field.Targets[0])}>";
-                                pb.AppendLine($"{pIndent}{prefixedName} = new {fieldTypeName}(gameData, {fieldRow}, language);");
+                                fieldTypeName = $"{Globalize("Lumina.Excel.LazyRow")}<{DecorateReferencedType(field.Targets[0])}>";
+                                pb.AppendLine($"{prefixedName} = new {fieldTypeName}(gameData, {fieldRow}, language);");
                             }
                             else
                             {
-                                fieldTypeName = GetGlobalName<ILazyRow>();
-                                pb.AppendLine($"{pIndent}{prefixedName} = {GetGlobalName<EmptyLazyRow>()}.GetFirstLazyRowOrEmpty(gameData, {fieldRow}, language, {string.Join(", ", field.Targets.Select(GeneratorUtils.EscapeStringToken))});");
+                                fieldTypeName = Globalize<ILazyRow>();
+                                pb.AppendLine($"{prefixedName} = {Globalize<EmptyLazyRow>()}.GetFirstLazyRowOrEmpty(gameData, {fieldRow}, language, {string.Join(", ", field.Targets.Select(GeneratorUtils.EscapeStringToken))});");
                             }
                         }
                         columnIdxOffset++;
@@ -199,7 +206,7 @@ public class SchemaSourceConverter
 
                         var subfieldPrefix = isRelation ? $"{prefixedName}[{iterVariable}].{field.Name}" : $"{prefixedName}[{iterVariable}]";
                         var subclassPrefix = $"{classPrefix}{field.Name}Struct.";
-                        var (fieldParseCode, fieldDefCode) = ParseFields(subfields, field.Relations, columns, columnIdxOffset, out _, out var fieldWrappedType, (char)(iterVariable + 1), parseIndentCount + 4, $"{prefixedOffsetPrefix}{byteOffset} + {iterVariable} * {size.byteSize}", subclassPrefix, subfieldPrefix);
+                        var (fieldParseCode, fieldDefCode) = ParseFields(subfields, field.Relations, columns, columnIdxOffset, out _, out var fieldWrappedType, (char)(iterVariable + 1), $"{prefixedOffsetPrefix}{byteOffset} + {iterVariable} * {size.byteSize}", subclassPrefix, subfieldPrefix);
 
                         if (string.IsNullOrEmpty(fieldWrappedType) == string.IsNullOrEmpty(fieldDefCode))
                             throw new InvalidOperationException("Array field must have either all named or one unnamed field");
@@ -209,12 +216,12 @@ public class SchemaSourceConverter
                         {
                             if (string.IsNullOrEmpty(field.Name))
                                 throw new InvalidOperationException("Array field must have a name attached");
-                            var tb = new StringBuilder();
-                            tb.AppendLine($"{dIndent}public class {field.Name}Struct");
-                            tb.AppendLine($"{dIndent}{{");
-                            tb.AppendLine(fieldDefCode);
-                            tb.AppendLine($"{dIndent}}}");
-                            db.AppendLine(tb.ToString().TrimEnd());
+                            var tb = new IndentedStringBuilder(IndentString);
+                            tb.AppendLine($"public class {field.Name}Struct");
+                            tb.AppendLine("{");
+                            tb.AppendLines(fieldDefCode, 1);
+                            tb.AppendLine("}");
+                            db.AppendLines(tb.ToString());
                             fieldWrappedType = $"{classPrefix}{field.Name}Struct";
                         }
 
@@ -224,13 +231,18 @@ public class SchemaSourceConverter
                             fieldTypeName = fieldWrappedType!;
 
                         if (!isRelation)
-                            pb.AppendLine($"{pIndent}{prefixedName} = new {fieldWrappedType}[{fieldCount}];");
-                        pb.AppendLine($"{pIndent}for (var {iterVariable} = 0; {iterVariable} < {fieldCount}; {iterVariable}++)");
-                        pb.AppendLine($"{pIndent}{{");
-                        if (!isRelation && isSubtype)
-                            pb.AppendLine($"{pIndent}    {prefixedName}[{iterVariable}] = new();");
-                        pb.AppendLine(fieldParseCode);
-                        pb.AppendLine($"{pIndent}}}");
+                            pb.AppendLine($"{prefixedName} = new {fieldWrappedType}[{fieldCount}];");
+                        pb.AppendLine($"for (var {iterVariable} = 0; {iterVariable} < {fieldCount}; {iterVariable}++)");
+                        var hasNew = !isRelation && isSubtype;
+                        var hasBraces = (hasNew ? 1 : 0) + fieldParseCode.Count(c => c == '\n') > 1;
+                        if (hasBraces) pb.AppendLine("{");
+                        using (pb.IndentScope())
+                        {
+                            if (hasNew)
+                                pb.AppendLine($"{prefixedName}[{iterVariable}] = new();");
+                            pb.AppendLines(fieldParseCode);
+                        }
+                        if (hasBraces) pb.AppendLine("}");
 
                         columnIdxOffset += size.columnCount * fieldCount;
                         byteOffset += size.byteSize * fieldCount;
@@ -243,35 +255,32 @@ public class SchemaSourceConverter
             parseSnippets.Add(field, pb.ToString());
 
             if (hasName)
-            {
-                if (isRelation)
-                    db.Append("    ");
-                db.AppendLine($"{dIndent}public {fieldTypeName} {field.Name} {{ get; internal set; }}");
-            }
+                db.AppendLine($"public {fieldTypeName} {field.Name} {{ get; internal set; }}");
             else
                 wrappedType = fieldTypeName;
 
             if (isRelation)
-                relationDefs[relationName].PushProperty(dbBase, dIndent);
+                relationDefs[relationName].PushProperty(dbBase);
         }
 
-        var orderedParseFields = fieldPrefix == "this" ? OrderFieldDependencies(fields) : fields;
+        // ordering is for parsing conditional links in the right order
+        var orderedParseFields = isRoot ? OrderFieldDependencies(fields) : fields;
 
         foreach(var field in orderedParseFields)
-            pbBase.Append(parseSnippets[field]);
+            pbBase.AppendLines(parseSnippets[field]);
 
         foreach(var relDef in relationDefs.Values)
         {
-            var tb = new StringBuilder();
-            tb.AppendLine($"{dIndent}public class {relDef.RelationType}");
-            tb.AppendLine($"{dIndent}{{");
-            tb.AppendLine(relDef.DefinitionBuilder.ToString().TrimEnd());
-            tb.AppendLine($"{dIndent}}}");
-            dbBase.AppendLine(tb.ToString().TrimEnd());
+            var tb = new IndentedStringBuilder(IndentString);
+            tb.AppendLine($"public class {relDef.RelationType}");
+            tb.AppendLine("{");
+            tb.AppendLines(relDef.DefinitionBuilder.ToString(), 1);
+            tb.AppendLine("}");
+            dbBase.AppendLines(tb.ToString());
         }
 
         finalColumnIdxOffset = columnIdxOffset;
-        return (pbBase.ToString().TrimEnd(), dbBase.ToString().TrimEnd());
+        return (pbBase.ToString(), dbBase.ToString());
     }
 
     // Topological sort
@@ -343,13 +352,37 @@ public class SchemaSourceConverter
         return 0;
     }
 
-    private string DecorateReferencedType(string typeName) =>
-        ReferencedSheetNamespace == null ? typeName : $"{ReferencedSheetNamespace}.{typeName}";
+    private string Globalize(string typeName) =>
+        TypeGlobalizer.GlobalizeType(typeName);
 
-    private static string LookupTypeName(ExcelColumnDataType type) =>
+    private string Globalize<T>() =>
+        TypeGlobalizer.GlobalizeType(typeof(T).FullName);
+
+    private string DecorateReferencedType(string typeName) =>
+        ReferencedSheetNamespace == null ? typeName : Globalize($"{ReferencedSheetNamespace}.{typeName}");
+
+    private static string ApplyPrefix(string prefix, string value)
+    {
+        if (string.IsNullOrEmpty(prefix))
+            return value;
+        if (prefix[^1] == '.')
+            return $"{prefix}{value}";
+        return $"{prefix}.{value}";
+    }
+
+    private static string TrimPrefix(string prefix)
+    {
+        if (string.IsNullOrEmpty(prefix))
+            return prefix;
+        if (prefix[^1] == '.')
+            return prefix[..^1];
+        return prefix;
+    }
+
+    private string LookupTypeName(ExcelColumnDataType type) =>
         type switch
     {
-        ExcelColumnDataType.String => GetGlobalName<SeString>(),
+        ExcelColumnDataType.String => Globalize<SeString>(),
         ExcelColumnDataType.Bool => "bool",
         ExcelColumnDataType.Int8 => "sbyte",
         ExcelColumnDataType.UInt8 => "byte",
@@ -363,6 +396,4 @@ public class SchemaSourceConverter
         >= ExcelColumnDataType.PackedBool0 and <= ExcelColumnDataType.PackedBool7 => "bool",
         var n => throw new InvalidOperationException($"Unknown column type {n}")
     };
-
-    private static string GetGlobalName<T>() => $"global::{typeof(T).FullName}";
 }
