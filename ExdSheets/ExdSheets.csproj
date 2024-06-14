@@ -1,12 +1,11 @@
 <Project Sdk="Microsoft.NET.Sdk">
 
     <PropertyGroup>
-        <TargetFramework>net8.0</TargetFramework>
+        <TargetFrameworks>net6.0;net7.0;net8.0</TargetFrameworks>
         <ImplicitUsings>enable</ImplicitUsings>
         <Nullable>enable</Nullable>
         <Configurations>Debug;Release</Configurations>
         <GeneratePackageOnBuild>true</GeneratePackageOnBuild>
-        <AppendTargetFrameworkToOutputPath>false</AppendTargetFrameworkToOutputPath>
 
         <Authors>Asriel Camora</Authors>
         <Version>0.1.0</Version>
@@ -26,7 +25,7 @@
         <None Include="../README.md" Pack="true" PackagePath="\" />
         
         <ProjectReference Include="..\ExdGenerator\ExdGenerator.csproj" OutputItemType="Analyzer" ReferenceOutputAssembly="false" IncludeAssets="all" />
-        <PackageReference Include="Lumina" Version="3.14.0" />
+        <PackageReference Include="Lumina" Version="3.15.2" />
         <PackageReference Include="Microsoft.SourceLink.GitHub" Version="1.0.0" PrivateAssets="All" />
     </ItemGroup>
 
