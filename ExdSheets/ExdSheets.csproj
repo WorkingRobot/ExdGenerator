@@ -8,7 +8,7 @@
         <GeneratePackageOnBuild>true</GeneratePackageOnBuild>
 
         <Authors>Asriel Camora</Authors>
-        <Version>0.2.0</Version>
+        <Version>1.0.0</Version>
         <Description>Better bindings for Lumina's sheets based on EXDSchema. Use this in place of GeneratedSheets.</Description>
         <PackageTags>ffxiv;lumina;exd;dalamud;excel</PackageTags>
         <PackageLicenseExpression>MIT</PackageLicenseExpression>
