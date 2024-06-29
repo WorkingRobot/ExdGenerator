@@ -26,7 +26,7 @@
         
         <ProjectReference Include="..\ExdGenerator\ExdGenerator.csproj" OutputItemType="Analyzer" ReferenceOutputAssembly="false" IncludeAssets="all" />
         <PackageReference Include="Lumina" Version="3.15.2" />
-        <PackageReference Include="Microsoft.SourceLink.GitHub" Version="1.0.0" PrivateAssets="All" />
+        <PackageReference Include="Microsoft.SourceLink.GitHub" Version="8.0.0" PrivateAssets="All" />
     </ItemGroup>
 
     <ItemGroup>
@@ -39,7 +39,7 @@
     </ItemGroup>
 
     <PropertyGroup>
-        <SchemaPath>$(MSBuildProjectDirectory)\..\EXDSchema\Schemas\2024.03.27.0000.0000</SchemaPath>
+        <SchemaPath>$(MSBuildProjectDirectory)\..\EXDSchema\Schemas\2024.06.18.0000.0000</SchemaPath>
         <GamePath>J:\Programs\steam\steamapps\common\FINAL FANTASY XIV Online\game\sqpack</GamePath>
         <GeneratedNamespace>ExdSheets</GeneratedNamespace>
         <UseUsings>true</UseUsings>

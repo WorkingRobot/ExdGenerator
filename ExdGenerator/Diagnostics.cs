@@ -9,4 +9,6 @@ internal static class Diagnostics
     public static DiagnosticDescriptor SchemaNotFound => new("EXD002", "Schema not found", "Schema file not found. Attempted: {0}", "Schema", DiagnosticSeverity.Error, true);
     
     public static DiagnosticDescriptor SheetNotFound => new("EXD003", "Sheet not found", "Sheet file not found in game files. Sheet name: {0}", "Schema", DiagnosticSeverity.Error, true);
+
+    public static DiagnosticDescriptor SheetFailedGeneration => new("EXD004", "Sheet failed to generate", "Sheet failed to generate. Sheet name: {0} Error: {1}", "Schema", DiagnosticSeverity.Warning, true);
 }

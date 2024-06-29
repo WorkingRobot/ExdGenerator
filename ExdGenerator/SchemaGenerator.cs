@@ -131,11 +131,19 @@ public class SchemaGenerator : IIncrementalGenerator
         var deserializer = new DeserializerBuilder().WithNamingConvention(CamelCaseNamingConvention.Instance).Build();
         var sheet = deserializer.Deserialize<Sheet>(reader);
 
-        var converter = new SchemaSourceConverter(sheet, options.GameData, new(options.UseUsings), options.IndentString, options.UseThis, options.ReferencedNamespace);
-        var source = SourceConstants.CreateSchemaSource(symbol.ContainingNamespace.IsGlobalNamespace ? null : symbol.ContainingNamespace.ToString(), symbol.Name, true, options.UseFileScopedNamespace, converter);
-        if (DebugFiles)
-            context.Debug($"{Convert.ToBase64String(Encoding.UTF8.GetBytes(source.ToString()))}");
-        context.AddSource($"{symbol.Name}.g.cs", source);
+
+        try
+        {
+            var converter = new SchemaSourceConverter(sheet, options.GameData, new(options.UseUsings), options.IndentString, options.UseThis, options.ReferencedNamespace);
+            var source = SourceConstants.CreateSchemaSource(symbol.ContainingNamespace.IsGlobalNamespace ? null : symbol.ContainingNamespace.ToString(), symbol.Name, true, options.UseFileScopedNamespace, converter);
+            if (DebugFiles)
+                context.Debug($"{Convert.ToBase64String(Encoding.UTF8.GetBytes(source.ToString()))}");
+            context.AddSource($"{symbol.Name}.g.cs", source);
+        }
+        catch (Exception e)
+        {
+            context.ReportDiagnostic(Diagnostic.Create(Diagnostics.SheetFailedGeneration, Location.None, DiagnosticSeverity.Warning, null, null, sheet.Name, e.Message));
+        }
     }
 
     private void GenerateSchemas(SourceProductionContext context, GeneratorOptions options)
@@ -158,11 +166,18 @@ public class SchemaGenerator : IIncrementalGenerator
                 continue;
             }
 
-            var converter = new SchemaSourceConverter(sheet, options.GameData, new(options.UseUsings), options.IndentString, options.UseThis, null);
-            var source = SourceConstants.CreateSchemaSource(options.GeneratedNamespace, sheet.Name, false, options.UseFileScopedNamespace, converter);
-            if (DebugFiles)
-                context.Debug($"{sheet.Name} -> {Convert.ToBase64String(Encoding.UTF8.GetBytes(source.ToString()))}");
-            context.AddSource($"{sheet.Name}.g.cs", source);
+            try
+            {
+                var converter = new SchemaSourceConverter(sheet, options.GameData, new(options.UseUsings), options.IndentString, options.UseThis, null);
+                var source = SourceConstants.CreateSchemaSource(options.GeneratedNamespace, sheet.Name, false, options.UseFileScopedNamespace, converter);
+                if (DebugFiles)
+                    context.Debug($"{sheet.Name} -> {Convert.ToBase64String(Encoding.UTF8.GetBytes(source.ToString()))}");
+                context.AddSource($"{sheet.Name}.g.cs", source);
+            }
+            catch (Exception e)
+            {
+                context.ReportDiagnostic(Diagnostic.Create(Diagnostics.SheetFailedGeneration, Location.None, DiagnosticSeverity.Warning, null, null, sheet.Name, e.Message));
+            }
         }
     }
 
