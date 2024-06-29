@@ -14,7 +14,7 @@ namespace ExdGenerator;
 [Generator]
 public class SchemaGenerator : IIncrementalGenerator
 {
-    private const bool DebugFiles = false;
+    private const bool DebugFiles = true;
 
     public void Initialize(IncrementalGeneratorInitializationContext context)
     {
