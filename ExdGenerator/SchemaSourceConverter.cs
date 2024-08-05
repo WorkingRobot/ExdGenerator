@@ -46,7 +46,7 @@ public class SchemaSourceConverter
 
         var orderedColumns = GameSheet.Columns.GroupBy(c => c.Offset).OrderBy(c => c.Key).SelectMany(g => g.OrderBy(c => c.Type)).ToArray();
 
-        Code = ParseFields(new(Definition.Fields, orderedColumns, new OffsetExpression().Add("offset"), 'i'), out var cols);
+        Code = ParseFields(new(Definition.Fields, ProcessRelations(Definition.Fields, Definition.Relations), orderedColumns, new OffsetExpression().Add("offset"), 'i'), out var cols);
 
         if (!cols.IsEmpty)
             throw new InvalidOperationException($"Expected {orderedColumns.Length} columns, but only parsed {orderedColumns.Length - cols.Length}");
@@ -62,11 +62,27 @@ public class SchemaSourceConverter
 
         foreach (var field in parentInfo.Fields)
         {
-            var (fieldCode, fieldStructDefs, fieldTypeName, fieldMemberOffset) = GetFieldParseCode(field, in parentInfo, currentColumns, parentInfo.Offset.Add(memberOffset), out currentColumns);
+            var (fieldCode, fieldStructDefs, fieldTypeName, fieldMemberOffset, fieldRelationed) = GetFieldParseCode(field, in parentInfo, currentColumns, parentInfo.Offset.Add(memberOffset), out currentColumns);
 
-            code.AppendLine($"public readonly {fieldTypeName} {field.Name} => {fieldCode};");
-            structDefs.AddRange(fieldStructDefs);
+            if (!fieldRelationed)
+            {
+                code.AppendLine($"public readonly {fieldTypeName} {field.Name} => {fieldCode};");
+                structDefs.AddRange(fieldStructDefs);
+            }
+
             memberOffset += fieldMemberOffset;
+        }
+
+        if (parentInfo.Relations.Count != 0)
+            code.AppendLine();
+
+        foreach (var relation in parentInfo.Relations)
+        {
+            var (fieldCode, fieldTypeName) = relation.GetParseCode(TypeGlobalizer, in parentInfo);
+
+            code.AppendLine($"public readonly {fieldTypeName} {relation.Name} => {fieldCode};");
+
+            structDefs.Add(relation.GetDefinition(TypeGlobalizer, IndentString));
         }
 
         nextColumns = currentColumns;
@@ -81,9 +97,78 @@ public class SchemaSourceConverter
         return code.ToString();
     }
 
-    private readonly record struct ParentInfo(IEnumerable<Field> Fields, ReadOnlyMemory<ExcelColumnDefinition> Columns, OffsetExpression Offset, char IterIdx);
+    private class RelationInfo(string name, List<Field> relations)
+    {
+        public string Name => name;
+        public string StructTypeName => GeneratorUtils.ConvertNameToStruct(Name);
+        public int ArrayLength => ArraySize ?? throw new InvalidOperationException("Array length is unknown");
 
-    private (string Code, List<string> StructDefs, string FieldTypeName, int MemberOffset) GetFieldParseCode(Field field, in ParentInfo parentInfo, ReadOnlyMemory<ExcelColumnDefinition> columns, OffsetExpression currentOffset, out ReadOnlyMemory<ExcelColumnDefinition> nextColumns)
+        private char? IterIdx { get; set; }
+        private int? ArraySize { get; set; }
+        private List<string> StructDefs { get; } = [];
+        private HashSet<Field> IncompleteFields { get; } = [.. relations];
+        private List<(Field Field, string Code, string FieldTypeName)> Fields { get; } = [];
+
+        public bool AddRelation(Field field, string code, List<string> structDefs, string fieldTypeName, int arraySize, char iterIdx)
+        {
+            if (!IncompleteFields.Contains(field))
+                return false;
+
+            if (ArraySize.HasValue && ArraySize != arraySize)
+                throw new ArgumentOutOfRangeException(nameof(arraySize), arraySize, $"Relation array size mismatch (Expected {ArrayLength}, got {arraySize} for field {field.Name})");
+            if (!ArraySize.HasValue)
+                ArraySize = arraySize;
+
+            if (IterIdx.HasValue && IterIdx != iterIdx)
+                throw new ArgumentOutOfRangeException(nameof(iterIdx), iterIdx, "Relation iteration variable mismatch. The parent must be the same.");
+            if (!IterIdx.HasValue)
+                IterIdx = iterIdx;
+
+            IncompleteFields.Remove(field);
+            Fields.Add((field, code, fieldTypeName));
+            StructDefs.AddRange(structDefs);
+            return true;
+        }
+
+        public (string Code, string FieldTypeName) GetParseCode(TypeGlobalizer globalizer, in ParentInfo parentInfo)
+        {
+            var fieldTypeName = $"{globalizer.GlobalizeType("ExdAccessor.LazyCollection")}<{StructTypeName}>";
+
+            var code = $"new(page, offset, static (page, offset, {parentInfo.IterIdx}) => new(page, {parentInfo.Offset}, {parentInfo.IterIdx}), {ArrayLength})";
+
+            return (code, fieldTypeName);
+        }
+
+        public string GetDefinition(TypeGlobalizer globalizer, string indentString)
+        {
+            if (IncompleteFields.Count != 0)
+                throw new InvalidOperationException("Incomplete fields still exist");
+
+            var code = new IndentedStringBuilder(indentString);
+
+            code.AppendLine($"public readonly struct {StructTypeName}({globalizer.GlobalizeType("ExdAccessor.Page")} page, uint offset, uint {IterIdx!.Value})");
+            code.AppendLine("{");
+            using (code.IndentScope())
+            {
+                foreach (var (field, parseCode, fieldTypeName) in Fields)
+                    code.AppendLine($"public readonly {fieldTypeName} {field.Name} => {parseCode};");
+
+                foreach (var def in StructDefs)
+                {
+                    code.AppendLine();
+
+                    code.AppendLines(def);
+                }
+            }
+            code.AppendLine("}");
+
+            return code.ToString();
+        }
+    }
+
+    private readonly record struct ParentInfo(List<Field> Fields, List<RelationInfo> Relations, ReadOnlyMemory<ExcelColumnDefinition> Columns, OffsetExpression Offset, char IterIdx);
+
+    private (string Code, List<string> StructDefs, string FieldTypeName, int MemberOffset, bool AddedToRelation) GetFieldParseCode(Field field, in ParentInfo parentInfo, ReadOnlyMemory<ExcelColumnDefinition> columns, OffsetExpression currentOffset, out ReadOnlyMemory<ExcelColumnDefinition> nextColumns)
     {
         if (field.Type is FieldType.Scalar or FieldType.Icon or FieldType.Color or FieldType.ModelId)
         {
@@ -94,7 +179,7 @@ public class SchemaSourceConverter
             var memberOffset = GetFirstColumnSize(columns.Span);
             nextColumns = columns[1..];
 
-            return (columnParseCode, [], LookupTypeName(column.Type), memberOffset);
+            return (columnParseCode, [], LookupTypeName(column.Type), memberOffset, false);
         }
         else if (field.Type is FieldType.Link)
         {
@@ -113,7 +198,7 @@ public class SchemaSourceConverter
             if (field.Targets is { } targets)
             {
                 var linkParseCode = GetLinkTargetCode(field.Targets, columnParseCode, false, out var fieldTypeName);
-                return (linkParseCode, [], fieldTypeName, memberOffset);
+                return (linkParseCode, [], fieldTypeName, memberOffset, false);
             }
             else
             {
@@ -125,7 +210,7 @@ public class SchemaSourceConverter
                     throw new InvalidOperationException("Conditional fields must have a switch reference");
                 var conditionField = parentInfo.Fields.First(f => field.Condition.Switch.Equals(f.Name, StringComparison.Ordinal));
                 var conditionOffset = GetMemberOffset(conditionField, in parentInfo, out var conditionColumns);
-                var (conditionParseCode, _, _, _) = GetFieldParseCode(conditionField, in parentInfo, conditionColumns, parentInfo.Offset.Add(conditionOffset), out _);
+                var (conditionParseCode, _, _, _, _) = GetFieldParseCode(conditionField, in parentInfo, conditionColumns, parentInfo.Offset.Add(conditionOffset), out _);
 
                 code.AppendLine($"(/* {field.Condition.Switch} */ {conditionParseCode}) switch");
                 using (code.IndentScope())
@@ -143,14 +228,13 @@ public class SchemaSourceConverter
                     code.AppendLine("}");
                 }
 
-                return (code.ToString(), [], fieldTypeName, memberOffset);
+                return (code.ToString(), [], fieldTypeName, memberOffset, false);
             }
         }
         else if (field.Type is FieldType.Array)
         {
             var structFields = field.Fields ?? [new Field() { Type = FieldType.Scalar }];
             var structSize = GetStructSize(structFields, columns);
-            var structTypeName = $"{field.Name}Struct";
 
             bool structIsFlattened;
             if (structFields.Count > 1)
@@ -166,23 +250,24 @@ public class SchemaSourceConverter
             var arrayColumns = columns[..(structSize.ColumnCount * arrayLength)];
             var structColumns = columns[..structSize.ColumnCount];
 
-            string code, fieldTypeName;
+            string arrayCode, elementCode;
+            string structTypeName;
             List<string> structDefs;
             if (structIsFlattened)
             {
                 var newParentInfo = parentInfo with { IterIdx = (char)(parentInfo.IterIdx + 1) };
-                (code, structDefs, fieldTypeName, _) = GetFieldParseCode(structFields[0], in newParentInfo, structColumns, currentOffset.Multiply(parentInfo.IterIdx.ToString(), structSize.ByteSize), out _);
-                // TODO: might add parentheses around lambda in case this gets nested or link conditioned
-                code = $"new(page, offset, static (page, offset, {parentInfo.IterIdx}) => {code}, {arrayLength})";
-                fieldTypeName = $"{Globalize("ExdAccessor.LazyCollection")}<{fieldTypeName}>";
+                (elementCode, structDefs, structTypeName, _, _) = GetFieldParseCode(structFields[0], in newParentInfo, structColumns, currentOffset.Multiply(parentInfo.IterIdx.ToString(), structSize.ByteSize), out _);
+                arrayCode = $"new(page, offset, static (page, offset, {parentInfo.IterIdx}) => {elementCode}, {arrayLength})";
             }
             else
             {
+                structTypeName = GeneratorUtils.ConvertNameToStruct(field.Name!);
+
                 var elementOffset = currentOffset.Multiply(parentInfo.IterIdx.ToString(), structSize.ByteSize);
-                var structInfo = new ParentInfo(structFields, structColumns, new OffsetExpression().Add("offset"), 'i');
+                var structInfo = new ParentInfo(structFields, ProcessRelations(structFields, field.Relations), structColumns, new OffsetExpression().Add("offset"), 'i');
                 var structCode = ParseFields(in structInfo, out _);
-                code = $"new(page, offset, static (page, offset, {parentInfo.IterIdx}) => new(page, {elementOffset}), {arrayLength})";
-                fieldTypeName = $"{Globalize("ExdAccessor.LazyCollection")}<{structTypeName}>";
+                elementCode = $"new(page, {elementOffset})";
+                arrayCode = $"new(page, offset, static (page, offset, {parentInfo.IterIdx}) => {elementCode}, {arrayLength})";
 
                 var newStructCode = new IndentedStringBuilder(IndentString);
 
@@ -197,8 +282,19 @@ public class SchemaSourceConverter
 
             var memberOffset = structSize.ByteSize * arrayLength;
             nextColumns = columns[(structSize.ColumnCount * arrayLength)..];
+            var fieldTypeName = $"{Globalize("ExdAccessor.LazyCollection")}<{structTypeName}>";
 
-            return (code, structDefs, fieldTypeName, memberOffset);
+            var addedToRelation = false;
+            foreach (var relation in parentInfo.Relations)
+            {
+                if (relation.AddRelation(field, elementCode, structDefs, structTypeName, arrayLength, parentInfo.IterIdx))
+                {
+                    addedToRelation = true;
+                    break;
+                }
+            }
+
+            return (arrayCode, structDefs, fieldTypeName, memberOffset, addedToRelation);
         }
         else
             throw new ArgumentException("Unknown field type");
@@ -225,6 +321,15 @@ public class SchemaSourceConverter
             typeName = Globalize("ExdAccessor.LazyRow");
             return $"{typeName}.GetFirstValidRowOrEmpty(page.Module, {columnParseCode}, [{string.Join(", ", targets.Select(v => $"typeof({DecorateReferencedType(v)})"))}])";
         }
+    }
+
+    private List<RelationInfo> ProcessRelations(List<Field> fields, Dictionary<string, List<string>>? schemaRelations)
+    {
+        return schemaRelations?.Select(
+            kv => new RelationInfo(kv.Key, kv.Value.Select(
+                f => fields.First(field => f.Equals(field.Name, StringComparison.Ordinal))
+            ).ToList()
+        )).ToList() ?? [];
     }
 
     private (int ByteSize, int ColumnCount) GetStructSize(IEnumerable<Field> fields, ReadOnlyMemory<ExcelColumnDefinition> columns)

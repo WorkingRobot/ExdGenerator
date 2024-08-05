@@ -12,4 +12,9 @@ internal static class GeneratorUtils
 
     public static string EscapeStringToken(string text) =>
         $"\"{JavaScriptEncoder.UnsafeRelaxedJsonEscaping.Encode(text)}\"";
+
+    public static string ConvertNameToStruct(string name)
+    {
+        return $"{name}Struct";
+    }
 }
