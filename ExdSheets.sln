@@ -9,8 +9,6 @@ Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "ExdGenerator", "ExdGenerato
 EndProject
 Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "Lumina", "Lumina\src\Lumina\Lumina.csproj", "{C687736A-4E50-4DEE-8FC6-13E4FD05D56D}"
 EndProject
-Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "ExdAccessor", "ExdAccessor\ExdAccessor.csproj", "{4F9392E1-D306-4278-AF51-51F00AA2942D}"
-EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|Any CPU = Debug|Any CPU
@@ -29,10 +27,6 @@ Global
 		{C687736A-4E50-4DEE-8FC6-13E4FD05D56D}.Debug|Any CPU.Build.0 = Debug|Any CPU
 		{C687736A-4E50-4DEE-8FC6-13E4FD05D56D}.Release|Any CPU.ActiveCfg = Release|Any CPU
 		{C687736A-4E50-4DEE-8FC6-13E4FD05D56D}.Release|Any CPU.Build.0 = Release|Any CPU
-		{4F9392E1-D306-4278-AF51-51F00AA2942D}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
-		{4F9392E1-D306-4278-AF51-51F00AA2942D}.Debug|Any CPU.Build.0 = Debug|Any CPU
-		{4F9392E1-D306-4278-AF51-51F00AA2942D}.Release|Any CPU.ActiveCfg = Release|Any CPU
-		{4F9392E1-D306-4278-AF51-51F00AA2942D}.Release|Any CPU.Build.0 = Release|Any CPU
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE

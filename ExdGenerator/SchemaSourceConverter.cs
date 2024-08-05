@@ -132,7 +132,7 @@ public class SchemaSourceConverter
 
         public (string Code, string FieldTypeName) GetParseCode(TypeGlobalizer globalizer, in ParentInfo parentInfo)
         {
-            var fieldTypeName = $"{globalizer.GlobalizeType("ExdAccessor.LazyCollection")}<{StructTypeName}>";
+            var fieldTypeName = $"{globalizer.GlobalizeType("ExdSheets.LazyCollection")}<{StructTypeName}>";
 
             var code = $"new(page, offset, static (page, offset, {parentInfo.IterIdx}) => new(page, {parentInfo.Offset}, {parentInfo.IterIdx}), {ArrayLength})";
 
@@ -146,7 +146,7 @@ public class SchemaSourceConverter
 
             var code = new IndentedStringBuilder(indentString);
 
-            code.AppendLine($"public readonly struct {StructTypeName}({globalizer.GlobalizeType("ExdAccessor.Page")} page, uint offset, uint {IterIdx!.Value})");
+            code.AppendLine($"public readonly struct {StructTypeName}({globalizer.GlobalizeType("ExdSheets.Page")} page, uint offset, uint {IterIdx!.Value})");
             code.AppendLine("{");
             using (code.IndentScope())
             {
@@ -202,7 +202,7 @@ public class SchemaSourceConverter
             }
             else
             {
-                var fieldTypeName = Globalize("ExdAccessor.LazyRow");
+                var fieldTypeName = Globalize("ExdSheets.LazyRow");
 
                 var code = new IndentedStringBuilder(IndentString);
 
@@ -271,7 +271,7 @@ public class SchemaSourceConverter
 
                 var newStructCode = new IndentedStringBuilder(IndentString);
 
-                newStructCode.AppendLine($"public readonly struct {structTypeName}({Globalize("ExdAccessor.Page")} page, uint offset)");
+                newStructCode.AppendLine($"public readonly struct {structTypeName}({Globalize("ExdSheets.Page")} page, uint offset)");
                 newStructCode.AppendLine("{");
                 using (newStructCode.IndentScope())
                     newStructCode.AppendLines(structCode);
@@ -282,7 +282,7 @@ public class SchemaSourceConverter
 
             var memberOffset = structSize.ByteSize * arrayLength;
             nextColumns = columns[(structSize.ColumnCount * arrayLength)..];
-            var fieldTypeName = $"{Globalize("ExdAccessor.LazyCollection")}<{structTypeName}>";
+            var fieldTypeName = $"{Globalize("ExdSheets.LazyCollection")}<{structTypeName}>";
 
             var addedToRelation = false;
             foreach (var relation in parentInfo.Relations)
@@ -304,21 +304,21 @@ public class SchemaSourceConverter
     {
         if (targets.Count == 1)
         {
-            typeName = $"{Globalize("ExdAccessor.LazyRow")}<{DecorateReferencedType(targets[0])}>";
+            typeName = $"{Globalize("ExdSheets.LazyRow")}<{DecorateReferencedType(targets[0])}>";
             if (useExplicitConstructor)
                 return $"new {typeName}(page.Module, {columnParseCode})";
             return $"new(page.Module, {columnParseCode})";
         }
         else if (targets.Count == 0)
         {
-            typeName = Globalize("ExdAccessor.LazyRowEmpty");
+            typeName = Globalize("ExdSheets.LazyRowEmpty");
             if (useExplicitConstructor)
                 return $"new {typeName}({columnParseCode})";
             return $"new({columnParseCode})";
         }
         else
         {
-            typeName = Globalize("ExdAccessor.LazyRow");
+            typeName = Globalize("ExdSheets.LazyRow");
             return $"{typeName}.GetFirstValidRowOrEmpty(page.Module, {columnParseCode}, [{string.Join(", ", targets.Select(v => $"typeof({DecorateReferencedType(v)})"))}])";
         }
     }

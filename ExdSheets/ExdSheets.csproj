@@ -25,7 +25,7 @@
         <None Include="../README.md" Pack="true" PackagePath="\" />
         
         <ProjectReference Include="..\ExdGenerator\ExdGenerator.csproj" OutputItemType="Analyzer" ReferenceOutputAssembly="false" IncludeAssets="all" />
-        <ProjectReference Include="..\ExdAccessor\ExdAccessor.csproj" />
+        <PackageReference Include="Lumina" Version="4.1.1" />
         <PackageReference Include="Microsoft.SourceLink.GitHub" Version="8.0.0" PrivateAssets="All" />
     </ItemGroup>
 
@@ -35,7 +35,6 @@
         <CompilerVisibleProperty Include="GeneratedNamespace" />
         <CompilerVisibleProperty Include="UseUsings" />
         <CompilerVisibleProperty Include="UseFileScopedNamespace" />
-        <CompilerVisibleProperty Include="UseThis" />
     </ItemGroup>
 
     <PropertyGroup>
@@ -44,7 +43,6 @@
         <GeneratedNamespace>ExdSheets</GeneratedNamespace>
         <UseUsings>true</UseUsings>
         <UseFileScopedNamespace>true</UseFileScopedNamespace>
-        <UseThis>false</UseThis>
     </PropertyGroup>
 
 </Project>
