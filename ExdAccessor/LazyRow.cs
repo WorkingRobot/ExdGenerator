@@ -5,6 +5,25 @@ public abstract class LazyRow
     public uint Row { get; protected init; }
 
     public abstract bool IsValueCreated { get; }
+
+    internal LazyRow()
+    {
+
+    }
+
+    public static LazyRow GetFirstValidRowOrEmpty(Module module, uint rowId, params Type[] sheetTypes)
+    {
+        foreach (var sheetType in sheetTypes)
+        {
+            if (module.GetSheetGeneric(sheetType) is { } sheet)
+            {
+                if (sheet.HasRow(rowId))
+                    return (LazyRow)Activator.CreateInstance(typeof(LazyRow<>).MakeGenericType(sheetType), module, rowId)!;
+            }
+        }
+
+        return new LazyRowEmpty(rowId);
+    }
 }
 
 public sealed class LazyRow<T> : LazyRow where T : struct
@@ -14,7 +33,7 @@ public sealed class LazyRow<T> : LazyRow where T : struct
 
     public override bool IsValueCreated => value.HasValue;
 
-    public T Value => value ??= module.GetSheet<T>().GetRow(RowId);
+    public T Value => value ??= module.GetSheet<T>().GetRow(Row);
 
     public LazyRow(Module module, uint rowId)
     {

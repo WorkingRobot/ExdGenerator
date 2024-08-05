@@ -6,7 +6,7 @@ namespace ExdAccessor;
 
 public sealed class Page
 {
-    internal Module Module { get; }
+    public Module Module { get; }
 
     private readonly byte[] data;
     internal ReadOnlySpan<byte> Data => data;

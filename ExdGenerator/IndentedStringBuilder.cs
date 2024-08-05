@@ -4,17 +4,10 @@ using System.Text;
 
 namespace ExdGenerator;
 
-public class IndentedStringBuilder
+public class IndentedStringBuilder(string indentString, int initialIndentLevel = 0)
 {
     private StringBuilder Builder { get; } = new();
-    private string IndentString { get; }
-    private int IndentLevel { get; set; }
-
-    public IndentedStringBuilder(string indentString, int initialIndentLevel = 0)
-    {
-        IndentString = indentString;
-        IndentLevel = initialIndentLevel;
-    }
+    private int IndentLevel { get; set; } = initialIndentLevel;
 
     private void ApplyIndent(int additionalIndent)
     {
@@ -22,7 +15,7 @@ public class IndentedStringBuilder
             return;
 
         for (var i = 0; i < IndentLevel + additionalIndent; i++)
-            Builder.Append(IndentString);
+            Builder.Append(indentString);
     }
 
     public IndentedStringBuilder AppendLine(string value, int additionalIndent = 0)

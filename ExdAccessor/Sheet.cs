@@ -1,21 +1,25 @@
 using Lumina.Data;
 using Lumina.Data.Files.Excel;
 using Lumina.Data.Structs.Excel;
+using System.Collections.Frozen;
 using System.Diagnostics.CodeAnalysis;
 using System.Reflection;
+using System.Runtime.CompilerServices;
 
 namespace ExdAccessor;
 
-public sealed class Sheet<T> where T : struct
+public sealed class Sheet<T> : ISheet where T : struct
 {
     public Module Module { get; }
 
     public Language Language { get; }
 
-    private T[]? Rows { get; }
-    private T[][]? Subrows { get; }
+    private List<Page> Pages { get; }
+    private FrozenDictionary<uint, (int PageIdx, uint Offset)>? Rows { get; }
+    private FrozenDictionary<uint, (int PageIdx, uint Offset, ushort RowCount)>? Subrows { get; }
+    private ushort SubrowDataOffset { get; }
 
-    [MemberNotNullWhen(true, nameof(Subrows))]
+    [MemberNotNullWhen(true, nameof(Subrows), nameof(SubrowDataOffset))]
     [MemberNotNullWhen(false, nameof(Rows))]
     public bool HasSubrows { get; }
 
@@ -46,11 +50,19 @@ public sealed class Sheet<T> where T : struct
 
         Language = headerFile.Languages.Contains(requestedLanguage) ? requestedLanguage : Language.None;
 
-        if (HasSubrows)
-            Subrows = new T[(int)headerFile.Header.RowCount][];
-        else
-            Rows = new T[(int)headerFile.Header.RowCount];
+        Dictionary<uint, (int PageIdx, uint Offset)>? rows = null;
+        Dictionary<uint, (int PageIdx, uint Offset, ushort RowCount)>? subrows = null;
 
+        if (HasSubrows)
+        {
+            subrows = new((int)headerFile.Header.RowCount);
+            SubrowDataOffset = headerFile.Header.DataOffset;
+        }
+        else
+            rows = new((int)headerFile.Header.RowCount);
+
+        Pages = new(headerFile.DataPages.Length);
+        var pageIdx = 0;
         foreach (var pageDef in headerFile.DataPages)
         {
             var filePath = Language == Language.None ? $"exd/{sheetName}_{pageDef.StartId}.exd" : $"exd/{sheetName}_{pageDef.StartId}_{LanguageUtil.GetLanguageStr(Language)}.exd";
@@ -58,7 +70,7 @@ public sealed class Sheet<T> where T : struct
             if (fileData == null)
                 continue;
 
-            var page = new Page(Module, fileData.Data);
+            Pages.Add(new(Module, fileData.Data));
 
             foreach (var rowPtr in fileData.RowData.Values)
             {
@@ -68,17 +80,77 @@ public sealed class Sheet<T> where T : struct
 
                 if (HasSubrows)
                 {
-                    var rows = new T[rowHeader.RowCount];
-                    for (var i = 0u; i < rowHeader.RowCount; ++i)
-                    {
-                        var subRowOffset = rowOffset + 2 + i * (headerFile.Header.DataOffset + 2u);
-                        rows[i] = SubRowConstructor(page, rowPtr.RowId, i, subRowOffset);
-                    }
-                    Subrows![rowPtr.RowId] = rows;
+                    if (rowHeader.RowCount > 0)
+                        subrows!.Add(rowPtr.RowId, (pageIdx, rowOffset, rowHeader.RowCount));
                 }
                 else
-                    Rows![rowPtr.RowId] = RowConstructor(page, rowPtr.RowId, rowOffset);
+                    rows!.Add(rowPtr.RowId, (pageIdx, rowOffset));
             }
+
+            pageIdx++;
         }
+
+        if (HasSubrows)
+            Subrows = subrows!.ToFrozenDictionary();
+        else
+            Rows = rows!.ToFrozenDictionary();
+    }
+
+    public bool HasRow(uint rowId)
+    {
+        if (HasSubrows)
+            return Subrows.ContainsKey(rowId);
+
+        return Rows.ContainsKey(rowId);
+    }
+
+    public bool HasRow(uint rowId, uint subRowId)
+    {
+        if (!HasSubrows)
+            throw new NotSupportedException("Cannot access subrow in a sheet that doesn't support any.");
+
+        ref readonly var val = ref Subrows[rowId];
+        if (Unsafe.IsNullRef(in val))
+            return false;
+
+        return subRowId < val.RowCount;
+    }
+
+    public T GetRow(uint rowId)
+    {
+        if (HasSubrows)
+            return GetRow(rowId, 0);
+
+        ref readonly var val = ref Rows[rowId];
+        if (Unsafe.IsNullRef(in val))
+            throw new ArgumentOutOfRangeException(nameof(rowId), "Row does not exist");
+
+        return RowConstructor(Pages[val.PageIdx], val.Offset, rowId);
+    }
+
+    public T GetRow(uint rowId, uint subRowId)
+    {
+        if (!HasSubrows)
+            throw new NotSupportedException("Cannot access subrow in a sheet that doesn't support any.");
+
+        ref readonly var val = ref Subrows[rowId];
+        if (Unsafe.IsNullRef(in val))
+            throw new ArgumentOutOfRangeException(nameof(rowId), "Row does not exist");
+
+        ArgumentOutOfRangeException.ThrowIfGreaterThanOrEqual(subRowId, val.RowCount);
+
+        return SubRowConstructor(Pages[val.PageIdx], val.Offset + 2 + subRowId * (SubrowDataOffset + 2u), rowId, subRowId);
+    }
+
+    public ushort GetSubrowCount(uint rowId)
+    {
+        if (!HasSubrows)
+            throw new NotSupportedException("Cannot access subrow in a sheet that doesn't support any.");
+
+        ref readonly var val = ref Subrows[rowId];
+        if (Unsafe.IsNullRef(in val))
+            throw new ArgumentOutOfRangeException(nameof(rowId), "Row does not exist");
+
+        return val.RowCount;
     }
 }

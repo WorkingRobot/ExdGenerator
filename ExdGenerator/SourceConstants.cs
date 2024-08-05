@@ -39,22 +39,14 @@ using System.CodeDom.Compiler;
 
         var sb = new IndentedStringBuilder(converter.IndentString);
         sb.AppendLine($@"[{globalize("System.CodeDom.Compiler.GeneratedCode")}(""ExdGenerator"", {GeneratorUtils.EscapeStringToken(Version)})]");
-        sb.AppendLine($@"[{globalize("Lumina.Excel.Sheet")}({GeneratorUtils.EscapeStringToken(converter.SheetName)}, 0x{converter.ColumnHash:X8})]");
-        sb.AppendLine($@"{(isPartial ? "partial" : "public")} class {className} : {globalize("Lumina.Excel.ExcelRow")}");
+        sb.AppendLine($@"[{globalize("ExdAccessor.Sheet")}({GeneratorUtils.EscapeStringToken(converter.SheetName)}, 0x{converter.ColumnHash:X8})]");
+        sb.AppendLine($@"readonly {(isPartial ? "partial" : "public")} struct {className}({globalize("ExdAccessor.Page")} page, uint row, uint offset)");
         sb.AppendLine("{");
         using (sb.IndentScope())
         {
-            sb.AppendLines(converter.DefinitionCode);
+            sb.AppendLine("public uint RowId => row;");
             sb.AppendLine();
-            sb.AppendLine($@"public override void PopulateData({globalize("Lumina.Excel.RowParser")} parser, {globalize("Lumina.GameData")} gameData, {globalize("Lumina.Data.Language")} language)");
-            sb.AppendLine("{");
-            using (sb.IndentScope())
-            {
-                sb.AppendLine("base.PopulateData(parser, gameData, language);");
-                sb.AppendLine();
-                sb.AppendLines(converter.ParseCode);
-            }
-            sb.AppendLine("}");
+            sb.AppendLines(converter.Code);
         }
         sb.AppendLine("}");
 
