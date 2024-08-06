@@ -12,7 +12,7 @@ public sealed class Module(GameData gameData, Language requestedLanguage = Langu
 
     private ConcurrentDictionary<(Type sheetType, Language requestedLanguage), ISheet> SheetCache { get; } = [];
 
-    public Sheet<T> GetSheet<T>(Language? language = null) where T : struct
+    public Sheet<T> GetSheet<T>(Language? language = null) where T : struct, ISheetRow<T>
     {
         language ??= Language;
 

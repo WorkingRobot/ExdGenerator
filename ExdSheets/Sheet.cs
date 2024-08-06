@@ -9,7 +9,7 @@ using System.Runtime.CompilerServices;
 
 namespace ExdSheets;
 
-public sealed class Sheet<T> : ISheet, IReadOnlyList<T> where T : struct
+public sealed class Sheet<T> : ISheet, IReadOnlyList<T> where T : struct, ISheetRow<T>
 {
     public Module Module { get; }
 
@@ -24,8 +24,6 @@ public sealed class Sheet<T> : ISheet, IReadOnlyList<T> where T : struct
     [MemberNotNullWhen(false, nameof(Rows))]
     public bool HasSubrows { get; }
 
-    private static readonly Func<Page, uint, uint, T> RowConstructor = (page, offset, row) => (T)Activator.CreateInstance(typeof(T), [page, offset, row])!;
-    private static readonly Func<Page, uint, uint, ushort, T> SubRowConstructor = (page, offset, row, subrow) => (T)Activator.CreateInstance(typeof(T), [page, offset, row, subrow])!;
     private static SheetAttribute Attribute => typeof(T).GetCustomAttribute<SheetAttribute>() ?? throw new InvalidOperationException("T has no SheetAttribute. Use the explicit sheet constructor.");
 
     public int Count => Rows?.Count ?? Subrows!.Count;
@@ -130,7 +128,7 @@ public sealed class Sheet<T> : ISheet, IReadOnlyList<T> where T : struct
         if (Unsafe.IsNullRef(in val))
             return null;
 
-        return RowConstructor(Pages[val.PageIdx], val.Offset, rowId);
+        return T.Create(Pages[val.PageIdx], val.Offset, rowId);
     }
 
     public T? TryGetRow(uint rowId, ushort subRowId)
@@ -145,7 +143,7 @@ public sealed class Sheet<T> : ISheet, IReadOnlyList<T> where T : struct
         if (subRowId >= val.RowCount)
             return null;
 
-        return SubRowConstructor(Pages[val.PageIdx], val.Offset + 2 + (subRowId * (SubrowDataOffset + 2u)), rowId, subRowId);
+        return T.Create(Pages[val.PageIdx], val.Offset + 2 + (subRowId * (SubrowDataOffset + 2u)), rowId, subRowId);
     }
 
 
@@ -164,7 +162,7 @@ public sealed class Sheet<T> : ISheet, IReadOnlyList<T> where T : struct
 
         ArgumentOutOfRangeException.ThrowIfGreaterThanOrEqual(subRowId, val.RowCount);
 
-        return SubRowConstructor(Pages[val.PageIdx], val.Offset + 2 + (subRowId * (SubrowDataOffset + 2u)), rowId, subRowId);
+        return T.Create(Pages[val.PageIdx], val.Offset + 2 + (subRowId * (SubrowDataOffset + 2u)), rowId, subRowId);
     }
 
     public ushort? TryGetSubrowCount(uint rowId)
@@ -196,14 +194,14 @@ public sealed class Sheet<T> : ISheet, IReadOnlyList<T> where T : struct
         if (!HasSubrows)
         {
             foreach (var rowData in Rows)
-                yield return RowConstructor(Pages[rowData.Value.PageIdx], rowData.Value.Offset, rowData.Key);
+                yield return T.Create(Pages[rowData.Value.PageIdx], rowData.Value.Offset, rowData.Key);
         }
         else
         {
             foreach (var rowData in Subrows)
             {
                 for (ushort i = 0; i < rowData.Value.RowCount; ++i)
-                    yield return SubRowConstructor(Pages[rowData.Value.PageIdx], rowData.Value.Offset + 2 + (i * (SubrowDataOffset + 2u)), rowData.Key, i);
+                    yield return T.Create(Pages[rowData.Value.PageIdx], rowData.Value.Offset + 2 + (i * (SubrowDataOffset + 2u)), rowData.Key, i);
             }
         }
     }

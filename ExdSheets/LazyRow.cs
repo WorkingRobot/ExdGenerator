@@ -29,7 +29,7 @@ public abstract class LazyRow
     }
 }
 
-public sealed class LazyRow<T> : LazyRow where T : struct
+public sealed class LazyRow<T> : LazyRow where T : struct, ISheetRow<T>
 {
     private readonly Module module;
     private bool attemptedValueCreation;

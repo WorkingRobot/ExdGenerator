@@ -40,7 +40,7 @@ using System.CodeDom.Compiler;
         var sb = new IndentedStringBuilder(converter.IndentString);
         sb.AppendLine($@"[{globalize("System.CodeDom.Compiler.GeneratedCode")}(""ExdGenerator"", {GeneratorUtils.EscapeStringToken(Version)})]");
         sb.AppendLine($@"[{globalize("ExdSheets.Sheet")}({GeneratorUtils.EscapeStringToken(converter.SheetName)}, 0x{converter.ColumnHash:X8})]");
-        sb.AppendLine($@"readonly {(isPartial ? "partial" : "public")} struct {className}({globalize("ExdSheets.Page")} page, uint offset, uint row{(converter.HasSubrows ? ", ushort subrow" : string.Empty)})");
+        sb.AppendLine($@"readonly {(isPartial ? "partial" : "public")} struct {className}({globalize("ExdSheets.Page")} page, uint offset, uint row{(converter.HasSubrows ? ", ushort subrow" : string.Empty)}) : {globalize("ExdSheets.ISheetRow")}<{className}>");
         sb.AppendLine("{");
         using (sb.IndentScope())
         {
@@ -49,6 +49,27 @@ using System.CodeDom.Compiler;
                 sb.AppendLine("public ushort SubrowId => subrow;");
             sb.AppendLine();
             sb.AppendLines(converter.Code);
+            sb.AppendLine();
+
+            sb.AppendLine($"static {className} {globalize("ExdSheets.ISheetRow")}<{className}>.Create(Page page, uint offset, uint row) =>");
+            using (sb.IndentScope())
+            {
+                if (!converter.HasSubrows)
+                    sb.AppendLine("new(page, offset, row);");
+                else
+                    sb.AppendLine("throw new NotSupportedException();");
+            }
+
+            sb.AppendLine();
+
+            sb.AppendLine($"static {className} {globalize("ExdSheets.ISheetRow")}<{className}>.Create(Page page, uint offset, uint row, ushort subrow) =>");
+            using (sb.IndentScope())
+            {
+                if (converter.HasSubrows)
+                    sb.AppendLine("new(page, offset, row, subrow);");
+                else
+                    sb.AppendLine("throw new NotSupportedException();");
+            }
         }
         sb.AppendLine("}");
 
