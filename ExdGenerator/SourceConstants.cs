@@ -6,7 +6,7 @@ namespace ExdGenerator;
 internal static class SourceConstants
 {
     public const string GeneratedNamespace = "ExdGenerator.Generated";
-    public const string Version = "1.0.0";
+    public const string Version = "2.0.0";
 
     public static SourceText CreateAttributeSource(string attributeName, bool useFileScopedNamespace)
     {
@@ -39,22 +39,37 @@ using System.CodeDom.Compiler;
 
         var sb = new IndentedStringBuilder(converter.IndentString);
         sb.AppendLine($@"[{globalize("System.CodeDom.Compiler.GeneratedCode")}(""ExdGenerator"", {GeneratorUtils.EscapeStringToken(Version)})]");
-        sb.AppendLine($@"[{globalize("Lumina.Excel.Sheet")}({GeneratorUtils.EscapeStringToken(converter.SheetName)}, 0x{converter.ColumnHash:X8})]");
-        sb.AppendLine($@"{(isPartial ? "partial" : "public")} class {className} : {globalize("Lumina.Excel.ExcelRow")}");
+        sb.AppendLine($@"[{globalize("ExdSheets.Sheet")}({GeneratorUtils.EscapeStringToken(converter.SheetName)}, 0x{converter.ColumnHash:X8})]");
+        sb.AppendLine($@"readonly {(isPartial ? "partial" : "public")} struct {className}({globalize("ExdSheets.Page")} page, uint offset, uint row{(converter.HasSubrows ? ", ushort subrow" : string.Empty)}) : {globalize("ExdSheets.ISheetRow")}<{className}>");
         sb.AppendLine("{");
         using (sb.IndentScope())
         {
-            sb.AppendLines(converter.DefinitionCode);
+            sb.AppendLine("public uint RowId => row;");
+            if (converter.HasSubrows)
+                sb.AppendLine("public ushort SubrowId => subrow;");
             sb.AppendLine();
-            sb.AppendLine($@"public override void PopulateData({globalize("Lumina.Excel.RowParser")} parser, {globalize("Lumina.GameData")} gameData, {globalize("Lumina.Data.Language")} language)");
-            sb.AppendLine("{");
+            sb.AppendLines(converter.Code);
+            sb.AppendLine();
+
+            sb.AppendLine($"static {className} {globalize("ExdSheets.ISheetRow")}<{className}>.Create(Page page, uint offset, uint row) =>");
             using (sb.IndentScope())
             {
-                sb.AppendLine("base.PopulateData(parser, gameData, language);");
-                sb.AppendLine();
-                sb.AppendLines(converter.ParseCode);
+                if (!converter.HasSubrows)
+                    sb.AppendLine("new(page, offset, row);");
+                else
+                    sb.AppendLine("throw new NotSupportedException();");
             }
-            sb.AppendLine("}");
+
+            sb.AppendLine();
+
+            sb.AppendLine($"static {className} {globalize("ExdSheets.ISheetRow")}<{className}>.Create(Page page, uint offset, uint row, ushort subrow) =>");
+            using (sb.IndentScope())
+            {
+                if (converter.HasSubrows)
+                    sb.AppendLine("new(page, offset, row, subrow);");
+                else
+                    sb.AppendLine("throw new NotSupportedException();");
+            }
         }
         sb.AppendLine("}");
 

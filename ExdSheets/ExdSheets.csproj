@@ -1,7 +1,7 @@
 <Project Sdk="Microsoft.NET.Sdk">
 
     <PropertyGroup>
-        <TargetFrameworks>net6.0;net7.0;net8.0</TargetFrameworks>
+        <TargetFrameworks>net8.0</TargetFrameworks>
         <ImplicitUsings>enable</ImplicitUsings>
         <Nullable>enable</Nullable>
         <Configurations>Debug;Release</Configurations>
@@ -25,7 +25,7 @@
         <None Include="../README.md" Pack="true" PackagePath="\" />
         
         <ProjectReference Include="..\ExdGenerator\ExdGenerator.csproj" OutputItemType="Analyzer" ReferenceOutputAssembly="false" IncludeAssets="all" />
-        <PackageReference Include="Lumina" Version="3.15.2" />
+        <PackageReference Include="Lumina" Version="4.1.1" />
         <PackageReference Include="Microsoft.SourceLink.GitHub" Version="8.0.0" PrivateAssets="All" />
     </ItemGroup>
 
@@ -35,16 +35,14 @@
         <CompilerVisibleProperty Include="GeneratedNamespace" />
         <CompilerVisibleProperty Include="UseUsings" />
         <CompilerVisibleProperty Include="UseFileScopedNamespace" />
-        <CompilerVisibleProperty Include="UseThis" />
     </ItemGroup>
 
     <PropertyGroup>
         <SchemaPath>$(MSBuildProjectDirectory)\..\EXDSchema\Schemas\2024.07.10.0001.0000</SchemaPath>
         <GamePath>J:\Programs\steam\steamapps\common\FINAL FANTASY XIV Online\game\sqpack</GamePath>
-        <GeneratedNamespace>ExdSheets</GeneratedNamespace>
+        <GeneratedNamespace>ExdSheets.Sheets</GeneratedNamespace>
         <UseUsings>true</UseUsings>
         <UseFileScopedNamespace>true</UseFileScopedNamespace>
-        <UseThis>false</UseThis>
     </PropertyGroup>
 
 </Project>

@@ -4,14 +4,9 @@ using System.Text;
 
 namespace ExdGenerator;
 
-public class TypeGlobalizer
+public class TypeGlobalizer(bool useUsings)
 {
-    private SortedSet<string>? Usings { get; }
-
-    public TypeGlobalizer(bool useUsings)
-    {
-        Usings = useUsings ? [] : null;
-    }
+    private SortedSet<string>? Usings { get; } = useUsings ? [] : null;
 
     public string GlobalizeType(string type)
     {

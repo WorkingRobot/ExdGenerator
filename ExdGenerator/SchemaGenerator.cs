@@ -80,8 +80,7 @@ public class SchemaGenerator : IIncrementalGenerator
                 ReferencedNamespace = referencedNamespace ?? generatedNamespace ?? throw new InvalidOperationException("ReferencedNamespace must be set"),
                 IndentString = indentString,
                 UseUsings = useUsingsBool,
-                UseFileScopedNamespace = useFileScopedNamespaceBool,
-                UseThis = useThisBool
+                UseFileScopedNamespace = useFileScopedNamespaceBool
             };
         });
 
@@ -134,7 +133,7 @@ public class SchemaGenerator : IIncrementalGenerator
 
         try
         {
-            var converter = new SchemaSourceConverter(sheet, options.GameData, new(options.UseUsings), options.IndentString, options.UseThis, options.ReferencedNamespace);
+            var converter = new SchemaSourceConverter(sheet, options.GameData, new(options.UseUsings), options.IndentString, options.ReferencedNamespace);
             var source = SourceConstants.CreateSchemaSource(symbol.ContainingNamespace.IsGlobalNamespace ? null : symbol.ContainingNamespace.ToString(), symbol.Name, true, options.UseFileScopedNamespace, converter);
             if (DebugFiles)
                 context.Debug($"{Convert.ToBase64String(Encoding.UTF8.GetBytes(source.ToString()))}");
@@ -168,7 +167,7 @@ public class SchemaGenerator : IIncrementalGenerator
 
             try
             {
-                var converter = new SchemaSourceConverter(sheet, options.GameData, new(options.UseUsings), options.IndentString, options.UseThis, null);
+                var converter = new SchemaSourceConverter(sheet, options.GameData, new(options.UseUsings), options.IndentString, null);
                 var source = SourceConstants.CreateSchemaSource(options.GeneratedNamespace, sheet.Name, false, options.UseFileScopedNamespace, converter);
                 if (DebugFiles)
                     context.Debug($"{sheet.Name} -> {Convert.ToBase64String(Encoding.UTF8.GetBytes(source.ToString()))}");
@@ -210,16 +209,8 @@ public sealed record GeneratorOptions
     public required string IndentString { get; init; }
     public required bool UseUsings { get; init; }
     public required bool UseFileScopedNamespace { get; init; }
-    public required bool UseThis { get; init; }
 
     private GameData? gameData = null;
-    public GameData GameData
-    {
-        get
-        {
-            if (gameData == null)
-                return gameData = new GameData(GamePath, new() { LoadMultithreaded = true });
-            return gameData;
-        }
-    }
+    public GameData GameData =>
+        gameData ??= new GameData(GamePath, new() { LoadMultithreaded = true });
 }
