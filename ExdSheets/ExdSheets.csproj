@@ -8,8 +8,8 @@
         <GeneratePackageOnBuild>true</GeneratePackageOnBuild>
 
         <Authors>Asriel Camora</Authors>
-        <Version>1.2.2</Version>
-        <Description>Better bindings for Lumina's sheets based on EXDSchema. Use this in place of GeneratedSheets.</Description>
+        <Version>2.0.0</Version>
+        <Description>Better bindings for Lumina's sheets based on EXDSchema. Use this in place of GeneratedSheets. Instantiate a ExdSheets.Module to get started.</Description>
         <PackageTags>ffxiv;lumina;exd;dalamud;excel</PackageTags>
         <PackageLicenseExpression>MIT</PackageLicenseExpression>
         <PackageProjectUrl>https://github.com/WorkingRobot/ExdGenerator</PackageProjectUrl>
@@ -38,7 +38,7 @@
     </ItemGroup>
 
     <PropertyGroup>
-        <SchemaPath>$(MSBuildProjectDirectory)\..\EXDSchema\Schemas\2024.07.10.0001.0000</SchemaPath>
+        <SchemaPath>$(MSBuildProjectDirectory)\..\EXDSchema\Schemas\2024.07.24.0000.0000</SchemaPath>
         <GamePath>J:\Programs\steam\steamapps\common\FINAL FANTASY XIV Online\game\sqpack</GamePath>
         <GeneratedNamespace>ExdSheets.Sheets</GeneratedNamespace>
         <UseUsings>true</UseUsings>
