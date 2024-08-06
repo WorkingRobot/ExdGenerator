@@ -302,26 +302,24 @@ public class SchemaSourceConverter
             throw new ArgumentException("Unknown field type");
     }
 
-    private string GetLinkTargetCode(IReadOnlyList<string> targets, string columnParseCode, bool useExplicitConstructor, out string typeName)
+    private string GetLinkTargetCode(IReadOnlyList<string> targets, string columnParseCode, bool useGeneric, out string typeName)
     {
         if (targets.Count == 1)
         {
             typeName = $"{Globalize("ExdSheets.LazyRow")}<{DecorateReferencedType(targets[0])}>";
-            if (useExplicitConstructor)
-                return $"new {typeName}(page.Module, {columnParseCode})";
+            if (useGeneric)
+                return $"{Globalize("ExdSheets.LazyRow")}.Create<{DecorateReferencedType(targets[0])}>(page.Module, {columnParseCode})";
             return $"new(page.Module, {columnParseCode})";
         }
         else if (targets.Count == 0)
         {
-            typeName = Globalize("ExdSheets.LazyRowEmpty");
-            if (useExplicitConstructor)
-                return $"new {typeName}({columnParseCode})";
-            return $"new({columnParseCode})";
+            typeName = Globalize("ExdSheets.LazyRow");
+            return $"{typeName}.CreateUntyped({columnParseCode})";
         }
         else
         {
             typeName = Globalize("ExdSheets.LazyRow");
-            return $"{typeName}.GetFirstValidRowOrEmpty(page.Module, {columnParseCode}, [{string.Join(", ", targets.Select(v => $"typeof({DecorateReferencedType(v)})"))}])";
+            return $"{typeName}.GetFirstValidRowOrUntyped(page.Module, {columnParseCode}, [{string.Join(", ", targets.Select(v => $"typeof({DecorateReferencedType(v)})"))}])";
         }
     }
 

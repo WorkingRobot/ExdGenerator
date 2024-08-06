@@ -1,73 +1,54 @@
-using System.Diagnostics.CodeAnalysis;
-
 namespace ExdSheets;
 
-public abstract class LazyRow
+public readonly struct LazyRow(Module? module, uint rowId, Type? rowType)
 {
-    public uint Row { get; protected init; }
+    public uint RowId => rowId;
 
-    public abstract bool IsValueCreated { get; }
-    public abstract bool HasValidValue { get; }
+    public bool IsUntyped => rowType == null;
 
-    internal LazyRow()
+    public bool Is<T>() where T : struct, ISheetRow<T> =>
+        typeof(T) == rowType;
+
+    public T? TryGetValue<T>() where T : struct, ISheetRow<T>
     {
+        if (!Is<T>())
+            return null;
 
+        return module!.GetSheet<T>().TryGetRow(RowId);
     }
 
-    public static LazyRow GetFirstValidRowOrEmpty(Module module, uint rowId, params Type[] sheetTypes)
+    public static LazyRow GetFirstValidRowOrUntyped(Module module, uint rowId, params Type[] sheetTypes)
     {
         foreach (var sheetType in sheetTypes)
         {
             if (module.GetSheetGeneric(sheetType) is { } sheet)
             {
                 if (sheet.HasRow(rowId))
-                    return (LazyRow)Activator.CreateInstance(typeof(LazyRow<>).MakeGenericType(sheetType), module, rowId)!;
+                    return new(module, rowId, sheetType);
             }
         }
 
-        return new LazyRowEmpty(rowId);
+        return CreateUntyped(rowId);
     }
+
+    public static LazyRow Create<T>(Module module, uint rowId) where T : struct, ISheetRow<T> => new(module, rowId, typeof(T));
+
+    public static LazyRow CreateUntyped(uint rowId) => new(null, rowId, null);
 }
 
-public sealed class LazyRow<T> : LazyRow where T : struct, ISheetRow<T>
+public readonly struct LazyRow<T>(Module module, uint rowId) where T : struct, ISheetRow<T>
 {
-    private readonly Module module;
-    private bool attemptedValueCreation;
-    private T? value;
+    private readonly Sheet<T> sheet = module.GetSheet<T>();
 
-    public override bool IsValueCreated => attemptedValueCreation;
-    public override bool HasValidValue => ValueNullable.HasValue;
+    public uint RowId => rowId;
 
-    [MemberNotNull(nameof(ValueNullable))]
-    public T Value => ValueNullable ?? throw new NullReferenceException();
+    public bool IsValid => sheet.HasRow(RowId);
 
-    public T? ValueNullable
-    {
-        get
-        {
-            if (!attemptedValueCreation)
-            {
-                attemptedValueCreation = true;
-                value = module.GetSheet<T>().TryGetRow(Row);
-            }
-            return value;
-        }
-    }
+    public T Value => sheet.GetRow(RowId);
 
-    public LazyRow(Module module, uint rowId)
-    {
-        this.module = module;
-        Row = rowId;
-    }
-}
+    public T? ValueNullable => sheet.TryGetRow(RowId);
 
-public sealed class LazyRowEmpty : LazyRow
-{
-    public override bool IsValueCreated => false;
-    public override bool HasValidValue => false;
+    private LazyRow ToGeneric() => LazyRow.Create<T>(module, rowId);
 
-    public LazyRowEmpty(uint rowId)
-    {
-        Row = rowId;
-    }
+    public static explicit operator LazyRow(LazyRow<T> row) => row.ToGeneric();
 }
