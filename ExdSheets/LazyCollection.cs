@@ -1,9 +1,9 @@
 using System.Collections;
 using System.Runtime.CompilerServices;
 
-namespace ExdAccessor;
+namespace ExdSheets;
 
-public readonly struct LazyCollection<T>(Page page, uint offset, Func<Page, uint, uint, T> ctor, int size) : IReadOnlyList<T>
+public readonly struct LazyCollection<T>(Page page, uint parentOffset, uint offset, Func<Page, uint, uint, uint, T> ctor, int size) : IReadOnlyList<T>
 {
     public T this[int index]
     {
@@ -11,7 +11,7 @@ public readonly struct LazyCollection<T>(Page page, uint offset, Func<Page, uint
         get
         {
             ArgumentOutOfRangeException.ThrowIfGreaterThanOrEqual(index, size);
-            return ctor(page, offset, (uint)index);
+            return ctor(page, parentOffset, offset, (uint)index);
         }
     }
 

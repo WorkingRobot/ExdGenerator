@@ -1,32 +1,41 @@
 using Lumina.Text.ReadOnly;
+using System.Buffers.Binary;
 using System.Runtime.CompilerServices;
 using System.Runtime.InteropServices;
 
-namespace ExdAccessor;
+namespace ExdSheets;
 
 public sealed class Page
 {
     public Module Module { get; }
 
     private readonly byte[] data;
-    internal ReadOnlySpan<byte> Data => data;
+    private ReadOnlyMemory<byte> Data => data;
 
-    internal Page(Module module, byte[] pageData)
+    private readonly ushort dataOffset;
+
+    internal Page(Module module, byte[] pageData, ushort headerDataOffset)
     {
         Module = module;
         data = pageData;
+        dataOffset = headerDataOffset;
     }
 
     [MethodImpl(MethodImplOptions.AggressiveInlining | MethodImplOptions.AggressiveOptimization)]
-    private D Read<D>(nuint offset) where D : struct =>
-        Unsafe.As<byte, D>(ref Unsafe.AddByteOffset(ref MemoryMarshal.GetReference(Data), offset));
+    private D Read<D>(nuint offset) where D : unmanaged =>
+        Unsafe.As<byte, D>(ref Unsafe.AddByteOffset(ref MemoryMarshal.GetArrayDataReference(data), offset));
+
+    [MethodImpl(MethodImplOptions.AggressiveInlining | MethodImplOptions.AggressiveOptimization)]
+    private static float ReverseEndianness(float v) =>
+        Unsafe.BitCast<uint, float>(BinaryPrimitives.ReverseEndianness(Unsafe.BitCast<float, uint>(v)));
 
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
-    public ReadOnlySeString ReadString(nuint offset)
+    public ReadOnlySeString ReadString(nuint offset, nuint structOffset)
     {
-        offset = ReadUInt32(offset);
-        var stringLength = Data[(int)offset..].IndexOf((byte)0);
-        return new ReadOnlySeString(data.AsMemory((int)offset, stringLength));
+        offset = ReadUInt32(offset) + structOffset + dataOffset;
+        var data = Data[(int)offset..];
+        var stringLength = data.Span.IndexOf((byte)0);
+        return new ReadOnlySeString(data[..stringLength]);
     }
 
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
@@ -43,31 +52,31 @@ public sealed class Page
 
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     public short ReadInt16(nuint offset) =>
-        Read<short>(offset);
+        BinaryPrimitives.ReverseEndianness(Read<short>(offset));
 
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     public ushort ReadUInt16(nuint offset) =>
-        Read<ushort>(offset);
+        BinaryPrimitives.ReverseEndianness(Read<ushort>(offset));
 
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     public int ReadInt32(nuint offset) =>
-        Read<int>(offset);
+        BinaryPrimitives.ReverseEndianness(Read<int>(offset));
 
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     public uint ReadUInt32(nuint offset) =>
-        Read<uint>(offset);
+        BinaryPrimitives.ReverseEndianness(Read<uint>(offset));
 
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     public float ReadFloat32(nuint offset) =>
-        Read<float>(offset);
+        ReverseEndianness(Read<float>(offset));
 
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     public long ReadInt64(nuint offset) =>
-        Read<long>(offset);
+        BinaryPrimitives.ReverseEndianness(Read<long>(offset));
 
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     public ulong ReadUInt64(nuint offset) =>
-        Read<ulong>(offset);
+        BinaryPrimitives.ReverseEndianness(Read<ulong>(offset));
 
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     public bool ReadPackedBool(nuint offset, byte bit) =>

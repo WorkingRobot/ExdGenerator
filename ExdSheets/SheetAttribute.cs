@@ -1,4 +1,4 @@
-namespace ExdAccessor;
+namespace ExdSheets;
 
 [AttributeUsage(AttributeTargets.Struct)]
 public class SheetAttribute(string name, uint columnHash = uint.MaxValue) : Attribute

@@ -22,6 +22,7 @@ public class SchemaSourceConverter
 
     public string SheetName { get; }
     public uint ColumnHash { get; }
+    public bool HasSubrows { get; }
 
     public SchemaSourceConverter(Sheet sheetDefinition, GameData gameData, TypeGlobalizer typeGlobalizer, string indentString, string? referencedSheetNamespace)
     {
@@ -43,10 +44,11 @@ public class SchemaSourceConverter
 
         SheetName = GameSheet.Name;
         ColumnHash = GameSheet.HeaderFile.GetColumnsHash();
+        HasSubrows = GameSheet.Header.Variant == ExcelVariant.Subrows;
 
         var orderedColumns = GameSheet.Columns.GroupBy(c => c.Offset).OrderBy(c => c.Key).SelectMany(g => g.OrderBy(c => c.Type)).ToArray();
 
-        Code = ParseFields(new(Definition.Fields, ProcessRelations(Definition.Fields, Definition.Relations), orderedColumns, new OffsetExpression().Add("offset"), 'i'), out var cols);
+        Code = ParseFields(new(Definition.Fields, ProcessRelations(Definition.Fields, Definition.Relations), orderedColumns, new OffsetExpression().Add("offset"), true, 'i'), out var cols);
 
         if (!cols.IsEmpty)
             throw new InvalidOperationException($"Expected {orderedColumns.Length} columns, but only parsed {orderedColumns.Length - cols.Length}");
@@ -134,7 +136,7 @@ public class SchemaSourceConverter
         {
             var fieldTypeName = $"{globalizer.GlobalizeType("ExdSheets.LazyCollection")}<{StructTypeName}>";
 
-            var code = $"new(page, offset, static (page, offset, {parentInfo.IterIdx}) => new(page, {parentInfo.Offset}, {parentInfo.IterIdx}), {ArrayLength})";
+            var code = $"new(page, {(parentInfo.IsRoot ? "offset" : "parentOffset")}, offset, static (page, parentOffset, offset, {parentInfo.IterIdx}) => new(page, parentOffset, {parentInfo.Offset}, {parentInfo.IterIdx}), {ArrayLength})";
 
             return (code, fieldTypeName);
         }
@@ -146,7 +148,7 @@ public class SchemaSourceConverter
 
             var code = new IndentedStringBuilder(indentString);
 
-            code.AppendLine($"public readonly struct {StructTypeName}({globalizer.GlobalizeType("ExdSheets.Page")} page, uint offset, uint {IterIdx!.Value})");
+            code.AppendLine($"public readonly struct {StructTypeName}({globalizer.GlobalizeType("ExdSheets.Page")} page, uint parentOffset, uint offset, uint {IterIdx!.Value})");
             code.AppendLine("{");
             using (code.IndentScope())
             {
@@ -166,7 +168,7 @@ public class SchemaSourceConverter
         }
     }
 
-    private readonly record struct ParentInfo(List<Field> Fields, List<RelationInfo> Relations, ReadOnlyMemory<ExcelColumnDefinition> Columns, OffsetExpression Offset, char IterIdx);
+    private readonly record struct ParentInfo(List<Field> Fields, List<RelationInfo> Relations, ReadOnlyMemory<ExcelColumnDefinition> Columns, OffsetExpression Offset, bool IsRoot, char IterIdx);
 
     private (string Code, List<string> StructDefs, string FieldTypeName, int MemberOffset, bool AddedToRelation) GetFieldParseCode(Field field, in ParentInfo parentInfo, ReadOnlyMemory<ExcelColumnDefinition> columns, OffsetExpression currentOffset, out ReadOnlyMemory<ExcelColumnDefinition> nextColumns)
     {
@@ -174,7 +176,7 @@ public class SchemaSourceConverter
         {
             var column = columns.Span[0];
 
-            var columnParseCode = LookupReadFunc(column.Type)(currentOffset.ToString());
+            var columnParseCode = LookupReadFunc(column.Type)(currentOffset.ToString(), parentInfo.IsRoot ? "offset" : "parentOffset");
 
             var memberOffset = GetFirstColumnSize(columns.Span);
             nextColumns = columns[1..];
@@ -185,7 +187,7 @@ public class SchemaSourceConverter
         {
             var column = columns.Span[0];
 
-            var columnParseCode = LookupReadFunc(column.Type)(currentOffset.ToString());
+            var columnParseCode = LookupReadFunc(column.Type)(currentOffset.ToString(), parentInfo.IsRoot ? "offset" : "parentOffset");
             if (column.Type != ExcelColumnDataType.UInt32)
                 columnParseCode = $"(uint){columnParseCode}";
 
@@ -255,23 +257,23 @@ public class SchemaSourceConverter
             List<string> structDefs;
             if (structIsFlattened)
             {
-                var newParentInfo = parentInfo with { IterIdx = (char)(parentInfo.IterIdx + 1) };
+                var newParentInfo = parentInfo with { IterIdx = (char)(parentInfo.IterIdx + 1), IsRoot = false };
                 (elementCode, structDefs, structTypeName, _, _) = GetFieldParseCode(structFields[0], in newParentInfo, structColumns, currentOffset.Multiply(parentInfo.IterIdx.ToString(), structSize.ByteSize), out _);
-                arrayCode = $"new(page, offset, static (page, offset, {parentInfo.IterIdx}) => {elementCode}, {arrayLength})";
+                arrayCode = $"new(page, {(parentInfo.IsRoot ? "offset" : "parentOffset")}, offset, static (page, parentOffset, offset, {parentInfo.IterIdx}) => {elementCode}, {arrayLength})";
             }
             else
             {
                 structTypeName = GeneratorUtils.ConvertNameToStruct(field.Name!);
 
                 var elementOffset = currentOffset.Multiply(parentInfo.IterIdx.ToString(), structSize.ByteSize);
-                var structInfo = new ParentInfo(structFields, ProcessRelations(structFields, field.Relations), structColumns, new OffsetExpression().Add("offset"), 'i');
+                var structInfo = new ParentInfo(structFields, ProcessRelations(structFields, field.Relations), structColumns, new OffsetExpression().Add("offset"), false, 'i');
                 var structCode = ParseFields(in structInfo, out _);
-                elementCode = $"new(page, {elementOffset})";
-                arrayCode = $"new(page, offset, static (page, offset, {parentInfo.IterIdx}) => {elementCode}, {arrayLength})";
+                elementCode = $"new(page, parentOffset, {elementOffset})";
+                arrayCode = $"new(page, {(parentInfo.IsRoot ? "offset" : "parentOffset")}, offset, static (page, parentOffset, offset, {parentInfo.IterIdx}) => {elementCode}, {arrayLength})";
 
                 var newStructCode = new IndentedStringBuilder(IndentString);
 
-                newStructCode.AppendLine($"public readonly struct {structTypeName}({Globalize("ExdSheets.Page")} page, uint offset)");
+                newStructCode.AppendLine($"public readonly struct {structTypeName}({Globalize("ExdSheets.Page")} page, uint parentOffset, uint offset)");
                 newStructCode.AppendLine("{");
                 using (newStructCode.IndentScope())
                     newStructCode.AppendLines(structCode);
@@ -383,7 +385,7 @@ public class SchemaSourceConverter
             else
             {
                 memberColumns = parentInfo.Columns.Slice(columnOffset, fieldColumnSize);
-                return columnOffset;
+                return byteOffset;
             }
         }
         throw new ArgumentException("Field not found in fields");
@@ -424,10 +426,9 @@ public class SchemaSourceConverter
         var n => throw new InvalidOperationException($"Unknown column type {n}")
     };
 
-    private Func<string, string> LookupReadFunc(ExcelColumnDataType type) =>
+    private Func<string, string, string> LookupReadFunc(ExcelColumnDataType type) =>
         type switch
     {
-        ExcelColumnDataType.String or
         ExcelColumnDataType.Bool or
         ExcelColumnDataType.Int8 or
         ExcelColumnDataType.UInt8 or
@@ -437,8 +438,9 @@ public class SchemaSourceConverter
         ExcelColumnDataType.UInt32 or
         ExcelColumnDataType.Float32 or
         ExcelColumnDataType.Int64 or
-        ExcelColumnDataType.UInt64 => d => $"page.Read{type}({d})",
-        >= ExcelColumnDataType.PackedBool0 and <= ExcelColumnDataType.PackedBool7 => d => $"page.ReadPackedBool({d}, {(byte)(type - ExcelColumnDataType.PackedBool0)})",
+        ExcelColumnDataType.UInt64 => (d, _) => $"page.Read{type}({d})",
+        ExcelColumnDataType.String => (d, o) => $"page.ReadString({d}, {o})",
+        >= ExcelColumnDataType.PackedBool0 and <= ExcelColumnDataType.PackedBool7 => (d, _) => $"page.ReadPackedBool({d}, {(byte)(type - ExcelColumnDataType.PackedBool0)})",
         var n => throw new InvalidOperationException($"Unknown column type {n}")
     };
 }

@@ -1,14 +1,15 @@
 using Lumina.Data;
 using Lumina.Data.Files.Excel;
 using Lumina.Data.Structs.Excel;
+using System.Collections;
 using System.Collections.Frozen;
 using System.Diagnostics.CodeAnalysis;
 using System.Reflection;
 using System.Runtime.CompilerServices;
 
-namespace ExdAccessor;
+namespace ExdSheets;
 
-public sealed class Sheet<T> : ISheet where T : struct
+public sealed class Sheet<T> : ISheet, IReadOnlyList<T> where T : struct
 {
     public Module Module { get; }
 
@@ -24,8 +25,12 @@ public sealed class Sheet<T> : ISheet where T : struct
     public bool HasSubrows { get; }
 
     private static readonly Func<Page, uint, uint, T> RowConstructor = (page, offset, row) => (T)Activator.CreateInstance(typeof(T), [page, offset, row])!;
-    private static readonly Func<Page, uint, uint, uint, T> SubRowConstructor = (page, offset, row, subrow) => (T)Activator.CreateInstance(typeof(T), [page, offset, row, subrow])!;
+    private static readonly Func<Page, uint, uint, ushort, T> SubRowConstructor = (page, offset, row, subrow) => (T)Activator.CreateInstance(typeof(T), [page, offset, row, subrow])!;
     private static SheetAttribute Attribute => typeof(T).GetCustomAttribute<SheetAttribute>() ?? throw new InvalidOperationException("T has no SheetAttribute. Use the explicit sheet constructor.");
+
+    public int Count => Rows?.Count ?? Subrows!.Count;
+
+    public T this[int index] => GetRow((uint)index);
 
     public Sheet(Module module) : this(module, module.Language)
     {
@@ -34,7 +39,7 @@ public sealed class Sheet<T> : ISheet where T : struct
 
     public Sheet(Module module, Language requestedLanguage) : this(module, requestedLanguage, Attribute.Name, Attribute.ColumnHash)
     {
-
+        
     }
 
     public Sheet(Module module, Language requestedLanguage, string sheetName, uint? columnHash = null)
@@ -70,18 +75,18 @@ public sealed class Sheet<T> : ISheet where T : struct
             if (fileData == null)
                 continue;
 
-            Pages.Add(new(Module, fileData.Data));
+            var newPage = new Page(Module, fileData.Data, headerFile.Header.DataOffset);
+            Pages.Add(newPage);
 
             foreach (var rowPtr in fileData.RowData.Values)
             {
-                fileData.Reader.BaseStream.Position = rowPtr.Offset;
-                var rowHeader = ExcelDataRowHeader.Read(fileData.Reader);
+                var (rowDataSize, subrowCount) = (newPage.ReadUInt32(rowPtr.Offset), newPage.ReadUInt16(rowPtr.Offset + 4));
                 var rowOffset = rowPtr.Offset + 6;
 
                 if (HasSubrows)
                 {
-                    if (rowHeader.RowCount > 0)
-                        subrows!.Add(rowPtr.RowId, (pageIdx, rowOffset, rowHeader.RowCount));
+                    if (subrowCount > 0)
+                        subrows!.Add(rowPtr.RowId, (pageIdx, rowOffset, subrowCount));
                 }
                 else
                     rows!.Add(rowPtr.RowId, (pageIdx, rowOffset));
@@ -104,42 +109,74 @@ public sealed class Sheet<T> : ISheet where T : struct
         return Rows.ContainsKey(rowId);
     }
 
-    public bool HasRow(uint rowId, uint subRowId)
+    public bool HasRow(uint rowId, ushort subRowId)
     {
         if (!HasSubrows)
             throw new NotSupportedException("Cannot access subrow in a sheet that doesn't support any.");
 
-        ref readonly var val = ref Subrows[rowId];
+        ref readonly var val = ref Subrows.GetValueRefOrNullRef(rowId);
         if (Unsafe.IsNullRef(in val))
             return false;
 
         return subRowId < val.RowCount;
     }
 
-    public T GetRow(uint rowId)
+    public T? TryGetRow(uint rowId)
     {
         if (HasSubrows)
-            return GetRow(rowId, 0);
+            return TryGetRow(rowId, 0);
 
-        ref readonly var val = ref Rows[rowId];
+        ref readonly var val = ref Rows.GetValueRefOrNullRef(rowId);
         if (Unsafe.IsNullRef(in val))
-            throw new ArgumentOutOfRangeException(nameof(rowId), "Row does not exist");
+            return null;
 
         return RowConstructor(Pages[val.PageIdx], val.Offset, rowId);
     }
 
-    public T GetRow(uint rowId, uint subRowId)
+    public T? TryGetRow(uint rowId, ushort subRowId)
     {
         if (!HasSubrows)
             throw new NotSupportedException("Cannot access subrow in a sheet that doesn't support any.");
 
-        ref readonly var val = ref Subrows[rowId];
+        ref readonly var val = ref Subrows.GetValueRefOrNullRef(rowId);
+        if (Unsafe.IsNullRef(in val))
+            return null;
+
+        if (subRowId >= val.RowCount)
+            return null;
+
+        return SubRowConstructor(Pages[val.PageIdx], val.Offset + 2 + (subRowId * (SubrowDataOffset + 2u)), rowId, subRowId);
+    }
+
+
+    public T GetRow(uint rowId) =>
+        TryGetRow(rowId) ??
+            throw new ArgumentOutOfRangeException(nameof(rowId), "Row does not exist");
+
+    public T GetRow(uint rowId, ushort subRowId)
+    {
+        if (!HasSubrows)
+            throw new NotSupportedException("Cannot access subrow in a sheet that doesn't support any.");
+
+        ref readonly var val = ref Subrows.GetValueRefOrNullRef(rowId);
         if (Unsafe.IsNullRef(in val))
             throw new ArgumentOutOfRangeException(nameof(rowId), "Row does not exist");
 
         ArgumentOutOfRangeException.ThrowIfGreaterThanOrEqual(subRowId, val.RowCount);
 
-        return SubRowConstructor(Pages[val.PageIdx], val.Offset + 2 + subRowId * (SubrowDataOffset + 2u), rowId, subRowId);
+        return SubRowConstructor(Pages[val.PageIdx], val.Offset + 2 + (subRowId * (SubrowDataOffset + 2u)), rowId, subRowId);
+    }
+
+    public ushort? TryGetSubrowCount(uint rowId)
+    {
+        if (!HasSubrows)
+            return null;
+
+        ref readonly var val = ref Subrows.GetValueRefOrNullRef(rowId);
+        if (Unsafe.IsNullRef(in val))
+            return null;
+
+        return val.RowCount;
     }
 
     public ushort GetSubrowCount(uint rowId)
@@ -147,10 +184,32 @@ public sealed class Sheet<T> : ISheet where T : struct
         if (!HasSubrows)
             throw new NotSupportedException("Cannot access subrow in a sheet that doesn't support any.");
 
-        ref readonly var val = ref Subrows[rowId];
+        ref readonly var val = ref Subrows.GetValueRefOrNullRef(rowId);
         if (Unsafe.IsNullRef(in val))
             throw new ArgumentOutOfRangeException(nameof(rowId), "Row does not exist");
 
         return val.RowCount;
+    }
+
+    public IEnumerator<T> GetEnumerator()
+    {
+        if (!HasSubrows)
+        {
+            foreach (var rowData in Rows)
+                yield return RowConstructor(Pages[rowData.Value.PageIdx], rowData.Value.Offset, rowData.Key);
+        }
+        else
+        {
+            foreach (var rowData in Subrows)
+            {
+                for (ushort i = 0; i < rowData.Value.RowCount; ++i)
+                    yield return SubRowConstructor(Pages[rowData.Value.PageIdx], rowData.Value.Offset + 2 + (i * (SubrowDataOffset + 2u)), rowData.Key, i);
+            }
+        }
+    }
+
+    IEnumerator IEnumerable.GetEnumerator()
+    {
+        return GetEnumerator();
     }
 }

@@ -2,7 +2,7 @@ using Lumina;
 using Lumina.Data;
 using System.Collections.Concurrent;
 
-namespace ExdAccessor;
+namespace ExdSheets;
 
 public sealed class Module(GameData gameData, Language requestedLanguage = Language.None)
 {

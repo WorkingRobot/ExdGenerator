@@ -6,7 +6,7 @@ namespace ExdGenerator;
 internal static class SourceConstants
 {
     public const string GeneratedNamespace = "ExdGenerator.Generated";
-    public const string Version = "1.0.0";
+    public const string Version = "2.0.0";
 
     public static SourceText CreateAttributeSource(string attributeName, bool useFileScopedNamespace)
     {
@@ -39,12 +39,14 @@ using System.CodeDom.Compiler;
 
         var sb = new IndentedStringBuilder(converter.IndentString);
         sb.AppendLine($@"[{globalize("System.CodeDom.Compiler.GeneratedCode")}(""ExdGenerator"", {GeneratorUtils.EscapeStringToken(Version)})]");
-        sb.AppendLine($@"[{globalize("ExdAccessor.Sheet")}({GeneratorUtils.EscapeStringToken(converter.SheetName)}, 0x{converter.ColumnHash:X8})]");
-        sb.AppendLine($@"readonly {(isPartial ? "partial" : "public")} struct {className}({globalize("ExdAccessor.Page")} page, uint row, uint offset)");
+        sb.AppendLine($@"[{globalize("ExdSheets.Sheet")}({GeneratorUtils.EscapeStringToken(converter.SheetName)}, 0x{converter.ColumnHash:X8})]");
+        sb.AppendLine($@"readonly {(isPartial ? "partial" : "public")} struct {className}({globalize("ExdSheets.Page")} page, uint offset, uint row{(converter.HasSubrows ? ", ushort subrow" : string.Empty)})");
         sb.AppendLine("{");
         using (sb.IndentScope())
         {
             sb.AppendLine("public uint RowId => row;");
+            if (converter.HasSubrows)
+                sb.AppendLine("public ushort SubrowId => subrow;");
             sb.AppendLine();
             sb.AppendLines(converter.Code);
         }

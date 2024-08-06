@@ -1,13 +1,14 @@
 using Lumina.Data;
+using System.Collections;
 
-namespace ExdAccessor;
+namespace ExdSheets;
 
-internal interface ISheet
+internal interface ISheet : IEnumerable
 {
     Module Module { get; }
     Language Language { get; }
 
     bool HasRow(uint rowId);
-    bool HasRow(uint rowId, uint subRowId);
+    bool HasRow(uint rowId, ushort subRowId);
     ushort GetSubrowCount(uint rowId);
 }
