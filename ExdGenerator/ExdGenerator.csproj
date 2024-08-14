@@ -15,7 +15,7 @@
     </ItemGroup>
 
     <ItemGroup>
-        <ProjectReference Include="..\Lumina\src\Lumina\Lumina.csproj" PrivateAssets="all" />
+        <ProjectReference Include="..\Lumina-sourcegen\src\Lumina\Lumina-sourcegen.csproj" PrivateAssets="all" />
         <PackageReference Include="YamlDotNet" Version="15.1.2" GeneratePathProperty="true" PrivateAssets="all" />
         <PackageReference Include="System.Text.Encodings.Web" Version="8.0.0" GeneratePathProperty="true" PrivateAssets="all" />
     </ItemGroup>
@@ -27,7 +27,7 @@
 
     <Target Name="GetDependencyTargetPaths">
         <ItemGroup>
-            <TargetPathWithTargetPlatformMoniker Include="..\Lumina\src\Lumina\bin\$(Configuration)\netstandard2.0\*.dll" IncludeRuntimeDependency="false" />
+            <TargetPathWithTargetPlatformMoniker Include="..\Lumina-sourcegen\src\Lumina\bin\$(Configuration)\netstandard2.0\*.dll" IncludeRuntimeDependency="false" />
             <TargetPathWithTargetPlatformMoniker Include="$(PKGYamlDotNet)\lib\netstandard2.0\YamlDotNet.dll" IncludeRuntimeDependency="false" />
             <TargetPathWithTargetPlatformMoniker Include="$(PKGSystem_Text_Encodings_Web)\lib\netstandard2.0\System.Text.Encodings.Web.dll" IncludeRuntimeDependency="false" />
         </ItemGroup>

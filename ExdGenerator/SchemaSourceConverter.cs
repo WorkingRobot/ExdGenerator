@@ -136,7 +136,7 @@ public class SchemaSourceConverter
 
         public (string Code, string FieldTypeName) GetParseCode(TypeGlobalizer globalizer, in ParentInfo parentInfo)
         {
-            var fieldTypeName = $"{globalizer.GlobalizeType("ExdSheets.LazyCollection")}<{StructTypeName}>";
+            var fieldTypeName = $"{globalizer.GlobalizeType("Lumina.Excel.LazyCollection")}<{StructTypeName}>";
 
             var code = $"new(page, {(parentInfo.IsRoot ? "offset" : "parentOffset")}, offset, static (page, parentOffset, offset, {parentInfo.IterIdx}) => new(page, parentOffset, {parentInfo.Offset}, {parentInfo.IterIdx}), {ArrayLength})";
 
@@ -150,7 +150,7 @@ public class SchemaSourceConverter
 
             var code = new IndentedStringBuilder(indentString);
 
-            code.AppendLine($"public readonly struct {StructTypeName}({globalizer.GlobalizeType("ExdSheets.Page")} page, uint parentOffset, uint offset, uint {IterIdx!.Value})");
+            code.AppendLine($"public readonly struct {StructTypeName}({globalizer.GlobalizeType("Lumina.Excel.ExcelPage")} page, uint parentOffset, uint offset, uint {IterIdx!.Value})");
             code.AppendLine("{");
             using (code.IndentScope())
             {
@@ -210,7 +210,7 @@ public class SchemaSourceConverter
             }
             else
             {
-                var fieldTypeName = Globalize("ExdSheets.LazyRow");
+                var fieldTypeName = Globalize("Lumina.Excel.RowRef");
 
                 var code = new IndentedStringBuilder(IndentString);
 
@@ -279,7 +279,7 @@ public class SchemaSourceConverter
 
                 var newStructCode = new IndentedStringBuilder(IndentString);
 
-                newStructCode.AppendLine($"public readonly struct {structTypeName}({Globalize("ExdSheets.Page")} page, uint parentOffset, uint offset)");
+                newStructCode.AppendLine($"public readonly struct {structTypeName}({Globalize("Lumina.Excel.ExcelPage")} page, uint parentOffset, uint offset)");
                 newStructCode.AppendLine("{");
                 using (newStructCode.IndentScope())
                     newStructCode.AppendLines(structCode);
@@ -290,7 +290,7 @@ public class SchemaSourceConverter
 
             var memberOffset = structSize.ByteSize * arrayLength;
             nextColumns = columns[(structSize.ColumnCount * arrayLength)..];
-            var fieldTypeName = $"{Globalize("ExdSheets.LazyCollection")}<{structTypeName}>";
+            var fieldTypeName = $"{Globalize("Lumina.Excel.LazyCollection")}<{structTypeName}>";
 
             var addedToRelation = false;
             foreach (var relation in parentInfo.Relations)
@@ -312,19 +312,19 @@ public class SchemaSourceConverter
     {
         if (targets.Count == 1)
         {
-            typeName = $"{Globalize("ExdSheets.LazyRow")}<{DecorateReferencedType(targets[0])}>";
+            typeName = $"{Globalize("Lumina.Excel.RowRef")}<{DecorateReferencedType(targets[0])}>";
             if (useGeneric)
-                return $"{Globalize("ExdSheets.LazyRow")}.Create<{DecorateReferencedType(targets[0])}>(page.Module, {columnParseCode})";
+                return $"{Globalize("Lumina.Excel.RowRef")}.Create<{DecorateReferencedType(targets[0])}>(page.Module, {columnParseCode})";
             return $"new(page.Module, {columnParseCode})";
         }
         else if (targets.Count == 0)
         {
-            typeName = Globalize("ExdSheets.LazyRow");
+            typeName = Globalize("Lumina.Excel.RowRef");
             return $"{typeName}.CreateUntyped({columnParseCode})";
         }
         else
         {
-            typeName = Globalize("ExdSheets.LazyRow");
+            typeName = Globalize("Lumina.Excel.RowRef");
             return $"{typeName}.GetFirstValidRowOrUntyped(page.Module, {columnParseCode}, [{string.Join(", ", targets.Select(v => $"typeof({DecorateReferencedType(v)})"))}])";
         }
     }

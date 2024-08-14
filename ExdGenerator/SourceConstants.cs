@@ -39,8 +39,8 @@ using System.CodeDom.Compiler;
 
         var sb = new IndentedStringBuilder(converter.IndentString);
         sb.AppendLine($@"[{globalize("System.CodeDom.Compiler.GeneratedCode")}(""ExdGenerator"", {GeneratorUtils.EscapeStringToken(Version)})]");
-        sb.AppendLine($@"[{globalize("ExdSheets.Sheet")}({GeneratorUtils.EscapeStringToken(converter.SheetName)}, 0x{converter.ColumnHash:X8})]");
-        sb.AppendLine($@"readonly {(isPartial ? "partial" : "public")} struct {className}({globalize("ExdSheets.Page")} page, uint offset, uint row{(converter.HasSubrows ? ", ushort subrow" : string.Empty)}) : {globalize("ExdSheets.ISheetRow")}<{className}>");
+        sb.AppendLine($@"[{globalize("Lumina.Excel.Sheet")}({GeneratorUtils.EscapeStringToken(converter.SheetName)}, 0x{converter.ColumnHash:X8})]");
+        sb.AppendLine($@"readonly {(isPartial ? "partial" : "public")} struct {className}({globalize("Lumina.Excel.ExcelPage")} page, uint offset, uint row{(converter.HasSubrows ? ", ushort subrow" : string.Empty)}) : {globalize("Lumina.Excel.IExcelRow")}<{className}>");
         sb.AppendLine("{");
         using (sb.IndentScope())
         {
@@ -51,7 +51,7 @@ using System.CodeDom.Compiler;
             sb.AppendLines(converter.Code);
             sb.AppendLine();
 
-            sb.AppendLine($"static {className} {globalize("ExdSheets.ISheetRow")}<{className}>.Create(Page page, uint offset, uint row) =>");
+            sb.AppendLine($"static {className} {globalize("Lumina.Excel.IExcelRow")}<{className}>.Create({globalize("Lumina.Excel.ExcelPage")} page, uint offset, uint row) =>");
             using (sb.IndentScope())
             {
                 if (!converter.HasSubrows)
@@ -62,7 +62,7 @@ using System.CodeDom.Compiler;
 
             sb.AppendLine();
 
-            sb.AppendLine($"static {className} {globalize("ExdSheets.ISheetRow")}<{className}>.Create(Page page, uint offset, uint row, ushort subrow) =>");
+            sb.AppendLine($"static {className} {globalize("Lumina.Excel.IExcelRow")}<{className}>.Create({globalize("Lumina.Excel.ExcelPage")} page, uint offset, uint row, ushort subrow) =>");
             using (sb.IndentScope())
             {
                 if (converter.HasSubrows)
