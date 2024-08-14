@@ -68,6 +68,8 @@ public class SchemaSourceConverter
 
             if (!fieldRelationed)
             {
+                if (field.Comment is { } comment)
+                    code.AppendLine($"/// {GeneratorUtils.CreateDocstring(comment)}");
                 code.AppendLine($"public readonly {fieldTypeName} {field.Name} => {fieldCode};");
                 structDefs.AddRange(fieldStructDefs);
             }
@@ -153,7 +155,11 @@ public class SchemaSourceConverter
             using (code.IndentScope())
             {
                 foreach (var (field, parseCode, fieldTypeName) in Fields)
+                {
+                    if (field.Comment is { } comment)
+                        code.AppendLine($"/// {GeneratorUtils.CreateDocstring(comment)}");
                     code.AppendLine($"public readonly {fieldTypeName} {field.Name} => {parseCode};");
+                }
 
                 foreach (var def in StructDefs)
                 {
