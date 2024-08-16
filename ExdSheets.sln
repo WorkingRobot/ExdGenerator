@@ -11,6 +11,8 @@ Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "Lumina-sourcegen", "Lumina-
 EndProject
 Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "Lumina", "Lumina\src\Lumina\Lumina.csproj", "{FC7A4CC3-F0A2-4970-B677-4F00D94AF2EF}"
 EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "ExdSchema.Converter", "ExdSchema.Converter\ExdSchema.Converter.csproj", "{1BC5FAC4-C3D6-4876-AB1C-57695CB2A594}"
+EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|Any CPU = Debug|Any CPU
@@ -33,6 +35,10 @@ Global
 		{FC7A4CC3-F0A2-4970-B677-4F00D94AF2EF}.Debug|Any CPU.Build.0 = Debug|Any CPU
 		{FC7A4CC3-F0A2-4970-B677-4F00D94AF2EF}.Release|Any CPU.ActiveCfg = Release|Any CPU
 		{FC7A4CC3-F0A2-4970-B677-4F00D94AF2EF}.Release|Any CPU.Build.0 = Release|Any CPU
+		{1BC5FAC4-C3D6-4876-AB1C-57695CB2A594}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{1BC5FAC4-C3D6-4876-AB1C-57695CB2A594}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{1BC5FAC4-C3D6-4876-AB1C-57695CB2A594}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{1BC5FAC4-C3D6-4876-AB1C-57695CB2A594}.Release|Any CPU.Build.0 = Release|Any CPU
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE

@@ -1,0 +1,22 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+    <PropertyGroup>
+        <OutputType>Exe</OutputType>
+        <TargetFramework>net8.0</TargetFramework>
+        <ImplicitUsings>enable</ImplicitUsings>
+        <Nullable>enable</Nullable>
+        <Description>Converts SaintCoinach schemas into EXDSchema schemas.</Description>
+    </PropertyGroup>
+
+    <ItemGroup>
+        <PackageReference Include="DotNext" Version="5.12.0" />
+        <PackageReference Include="Meziantou.Analyzer" Version="2.0.163">
+            <PrivateAssets>all</PrivateAssets>
+            <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
+        </PackageReference>
+    </ItemGroup>
+
+    <ItemGroup>
+      <ProjectReference Include="..\Lumina\src\Lumina\Lumina.csproj" />
+    </ItemGroup>
+</Project>
