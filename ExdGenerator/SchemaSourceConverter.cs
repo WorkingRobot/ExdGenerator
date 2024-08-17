@@ -1,5 +1,6 @@
 using ExdGenerator.Schema;
 using Lumina;
+using Lumina.Data.Files.Excel;
 using Lumina.Data.Structs.Excel;
 using Lumina.Excel;
 using Lumina.Text.ReadOnly;
@@ -136,7 +137,7 @@ public class SchemaSourceConverter
 
         public (string Code, string FieldTypeName) GetParseCode(TypeGlobalizer globalizer, in ParentInfo parentInfo)
         {
-            var fieldTypeName = $"{globalizer.GlobalizeType("Lumina.Excel.LazyCollection")}<{StructTypeName}>";
+            var fieldTypeName = $"{globalizer.GlobalizeType("Lumina.Excel.Collection")}<{StructTypeName}>";
 
             var code = $"new(page, {(parentInfo.IsRoot ? "offset" : "parentOffset")}, offset, static (page, parentOffset, offset, {parentInfo.IterIdx}) => new(page, parentOffset, {parentInfo.Offset}, {parentInfo.IterIdx}), {ArrayLength})";
 
@@ -290,7 +291,7 @@ public class SchemaSourceConverter
 
             var memberOffset = structSize.ByteSize * arrayLength;
             nextColumns = columns[(structSize.ColumnCount * arrayLength)..];
-            var fieldTypeName = $"{Globalize("Lumina.Excel.LazyCollection")}<{structTypeName}>";
+            var fieldTypeName = $"{Globalize("Lumina.Excel.Collection")}<{structTypeName}>";
 
             var addedToRelation = false;
             foreach (var relation in parentInfo.Relations)
@@ -312,9 +313,11 @@ public class SchemaSourceConverter
     {
         if (targets.Count == 1)
         {
-            typeName = $"{Globalize("Lumina.Excel.RowRef")}<{DecorateReferencedType(targets[0])}>";
+            var isSubrows = IsSheetSubrows(targets[0]);
+
+            typeName = $"{Globalize(isSubrows ? "Lumina.Excel.SubrowRef" : "Lumina.Excel.RowRef")}<{DecorateReferencedType(targets[0])}>";
             if (useGeneric)
-                return $"{Globalize("Lumina.Excel.RowRef")}.Create<{DecorateReferencedType(targets[0])}>(page.Module, {columnParseCode})";
+                return $"{Globalize("Lumina.Excel.RowRef")}.{(isSubrows ? "CreateSubrow" : "Create")}<{DecorateReferencedType(targets[0])}>(page.Module, {columnParseCode})";
             return $"new(page.Module, {columnParseCode})";
         }
         else if (targets.Count == 0)
@@ -447,4 +450,7 @@ public class SchemaSourceConverter
         >= ExcelColumnDataType.PackedBool0 and <= ExcelColumnDataType.PackedBool7 => (d, _) => $"page.ReadPackedBool({d}, {(byte)(type - ExcelColumnDataType.PackedBool0)})",
         var n => throw new InvalidOperationException($"Unknown column type {n}")
     };
+
+    private bool IsSheetSubrows(string sheetName) =>
+        GameData.GetFile<ExcelHeaderFile>(ExcelModule.BuildExcelHeaderPath(sheetName))!.Header.Variant == ExcelVariant.Subrows;
 }
